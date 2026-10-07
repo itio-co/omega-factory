@@ -1,8 +1,10 @@
 # Cross-factory transport (spec, v1)
 
-Status: **M1 spec** for kido `omega-things-cross-factory-transport`. Data model and
-save format are implemented (`src/lib/game/transport-model.ts`, Collection v3); the
-tick mechanic (M2) and World-map UI (M3) are not yet.
+Status: **M1–M3** for kido `omega-things-cross-factory-transport`. Data model and
+save format (`transport-model.ts`, Collection v3), the mechanic (`transport.ts`) and the
+World-view UI (`TransportNetwork.svelte`: drag-to-link, link inspector, stalled/outage
+feedback, link-aware diagnosis; edits share the draft Apply/Discard + undo) are
+implemented. M4 (tuning, quests, tutorial) remains.
 
 Defaults marked _(provisional)_ were chosen without a user answer and can be revisited;
 see the kido `decisions.md`.
