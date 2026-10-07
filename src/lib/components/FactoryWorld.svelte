@@ -7,6 +7,8 @@
   import { routeFlowRate } from '../game/flow';
   import PlaneControls from './PlaneControls.svelte';
   import FactoryWorldScene from './FactoryWorldScene.svelte';
+  import TransportNetwork from './TransportNetwork.svelte';
+  import { factoryLinks } from '../game/transport';
   let { session }: { session: Session } = $props();
   let panMode = $state(false);
   let viewport: HTMLDivElement;
@@ -266,6 +268,11 @@
                 .game.definition.nodes.length} Things · {thing.game.state.factory.downtime > 0
                 ? 'Out of service'
                 : 'Running'}</span
+            ><span class="factory-io"
+              >{factoryLinks(session.links, thing.id).imports.length} imports · {factoryLinks(
+                session.links,
+                thing.id,
+              ).exports.length} exports</span
             ><small>Open enclosure →</small>
           </button>
         {/each}
@@ -273,4 +280,5 @@
       </div>
     </div>
   </div>
+  <TransportNetwork {session} />
 </section>
