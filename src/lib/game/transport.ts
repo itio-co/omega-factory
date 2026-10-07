@@ -1,5 +1,6 @@
 import { capacity, CATALOG, total } from './catalog';
 import { tick } from './engine';
+import type { Diagnosis } from './types';
 import type { Collection, WorldThing } from './collection';
 import {
   LINK_LEVELS,
@@ -207,4 +208,53 @@ export function tickWorld(world: WorldThing): WorldThing {
     link.transit.push({ amount, remaining: link.delay });
   }
   return next;
+}
+
+/** Goods currently on a link. */
+export const inTransit = (link: TransportLink) => link.transit.reduce((s, p) => s + p.amount, 0);
+/** Goods a removal would lose: in-transit goods beyond the source Outlet's free capacity. */
+export function removalLoss(world: WorldThing, link: TransportLink) {
+  const node = portNode(world, link.from);
+  if (!node) return inTransit(link);
+  const inv = world.factories.find((f) => f.id === link.from.factory)!.game.state.nodes[node.id]
+    .inventory;
+  return Math.max(0, inTransit(link) - Math.max(0, capacity(node) - total(inv)));
+}
+/** Links touching a factory, split into what it imports and exports. */
+export function factoryLinks(links: TransportLink[], factory: string) {
+  return {
+    imports: links.filter((l) => l.to.factory === factory),
+    exports: links.filter((l) => l.from.factory === factory),
+  };
+}
+const factoryName = (world: WorldThing, id: string) =>
+  world.factories.find((f) => f.id === id)?.name ?? id;
+/** Bottleneck diagnosis for one link, naming the link and both factories. */
+export function diagnoseLink(world: WorldThing, link: TransportLink): Diagnosis {
+  const name = `${link.id} (${factoryName(world, link.from.factory)} → ${factoryName(world, link.to.factory)})`;
+  if (outage(world, link))
+    return {
+      label: 'Link outage',
+      detail: `${name} is holding ${inTransit(link)} goods until both factories are in service.`,
+      tone: 'warn',
+    };
+  if (linkStalled(link))
+    return {
+      label: 'Link stalled',
+      detail: `${name} is backed up: the Inlet in ${factoryName(world, link.to.factory)} is full.`,
+      tone: 'warn',
+    };
+  if (!link.enabled)
+    return { label: 'Link paused', detail: `${name} is disabled.`, tone: 'neutral' };
+  if (!inTransit(link))
+    return {
+      label: 'Link idle',
+      detail: `${name} is waiting for goods at the Outlet in ${factoryName(world, link.from.factory)}.`,
+      tone: 'neutral',
+    };
+  return {
+    label: 'Link moving',
+    detail: `${name} carries ${inTransit(link)} goods, up to ${linkCapacity(link.level)}/tick.`,
+    tone: 'good',
+  };
 }

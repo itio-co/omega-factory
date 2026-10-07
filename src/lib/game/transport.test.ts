@@ -14,6 +14,10 @@ import {
   removeLinkFromDraft,
   tickWorld,
   undoLinkEdit,
+  diagnoseLink,
+  removalLoss,
+  factoryLinks,
+  inTransit,
 } from './transport';
 import type { TransportLink } from './transport-model';
 
@@ -49,7 +53,6 @@ function linked(outStock = 8) {
 }
 const inv = (book: Collection, f: number, id: string) =>
   book.worlds[0].factories[f].game.state.nodes[id].inventory.ingot;
-const inTransit = (l: TransportLink) => l.transit.reduce((s, p) => s + p.amount, 0);
 const goods = (book: Collection) =>
   inv(book, 0, 'export-1') + inv(book, 1, 'import-1') + inTransit(book.worlds[0].links[0]);
 const step = (book: Collection, n = 1) => {
@@ -171,5 +174,25 @@ describe('World tick', () => {
     const fed = structuredClone(game);
     fed.state.nodes['import-1'].inventory.ore = 4;
     expect(tick(fed, ports).state.nodes['import-1'].inventory.ore).toBeLessThan(4);
+  });
+});
+
+describe('link feedback', () => {
+  it('names the link in its diagnosis and reports stalls, outages and losses', () => {
+    let book = linked(24);
+    expect(diagnoseLink(book.worlds[0], book.worlds[0].links[0]).label).toBe('Link idle');
+    book = step(book, 1);
+    expect(diagnoseLink(book.worlds[0], book.worlds[0].links[0]).detail).toMatch(/link-4 \(/);
+    book = step(book, 12);
+    expect(diagnoseLink(book.worlds[0], book.worlds[0].links[0]).label).toBe('Link stalled');
+    const out = book.worlds[0].factories[0].game.state.nodes['export-1'].inventory;
+    const carried = inTransit(book.worlds[0].links[0]);
+    out.ingot = 8;
+    expect(removalLoss(book.worlds[0], book.worlds[0].links[0])).toBe(carried);
+    out.ingot = 8 - carried;
+    expect(removalLoss(book.worlds[0], book.worlds[0].links[0])).toBe(0);
+    book.worlds[0].factories[1].game.state.factory.downtime = 2;
+    expect(diagnoseLink(book.worlds[0], book.worlds[0].links[0]).label).toBe('Link outage');
+    expect(factoryLinks(book.worlds[0].links, 'factory-3').imports).toHaveLength(1);
   });
 });
