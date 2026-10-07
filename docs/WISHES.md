@@ -81,7 +81,8 @@ is exposed. Pending stories are reconciled when their original request is retrie
 The YAML document has `version: 1` and a `wishes` array. Each row has `id`, `text`,
 `createdAt`, `updatedAt`, submission `status`, `story`, and `worker`. Writes serialize,
 flush to disk, rename atomically and flush the directory. Invalid existing storage
-fails startup without replacing the file. Keep the directory private and back it
+fails startup without replacing the file. If a rename succeeds but its directory flush fails,
+the server refuses further writes until restart and reloads the durable file. Keep the directory private and back it
 up. There is no automatic expiry: deleting entries removes their retry history.
 Mount the whole directory persistently before Kubernetes rollout; that deployment
 is a separate story. Use a single server replica with the same process namespace.

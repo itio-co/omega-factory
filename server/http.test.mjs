@@ -151,3 +151,29 @@ test('UUID letter case cannot create another Wish or strand story confirmation',
   assert.equal((await f.post({ requestId: id, text: 'One idea' })).status, 200);
   assert.equal(f.store.read().wishes.length, 1);
 });
+
+test('an uncertain disk flush cannot let stale memory overwrite the renamed file', async (t) => {
+  const { open } = await import('node:fs/promises');
+  const f = await fixture(t);
+  const directory = await open(tmpdir(), 'r');
+  const prototype = Object.getPrototypeOf(directory),
+    sync = prototype.sync;
+  await directory.close();
+  const mocked = t.mock.method(prototype, 'sync', async function () {
+    if ((await this.stat()).isDirectory()) throw new Error('simulated directory flush failure');
+    return sync.call(this);
+  });
+  const first = { requestId: randomUUID(), text: 'Survive ambiguous flush' };
+  assert.equal((await f.post(first)).status, 503);
+  mocked.mock.restore();
+  assert.equal(
+    (await f.post({ requestId: randomUUID(), text: 'Must wait for restart' })).status,
+    503,
+  );
+  await f.restart();
+  assert.equal((await f.post(first)).status, 200);
+  assert.deepEqual(
+    f.store.read().wishes.map((w) => w.id),
+    [first.requestId],
+  );
+});

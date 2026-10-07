@@ -62,6 +62,7 @@ export class WishStore {
     this.data = data;
     this.tail = Promise.resolve();
     this.closed = false;
+    this.uncertain = false;
   }
   read() {
     return structuredClone(this.data);
@@ -69,6 +70,8 @@ export class WishStore {
   mutate(fn) {
     const next = this.tail.then(async () => {
       if (this.closed) throw new Error('Wish storage closed');
+      if (this.uncertain)
+        throw new Error('Wish storage flush was uncertain; restart before writing');
       const draft = this.read();
       const result = await fn(draft);
       database.parse(draft);
@@ -76,6 +79,7 @@ export class WishStore {
       try {
         await writeSynced(temp, yaml.dump(draft, { noRefs: true, lineWidth: -1 }));
         await rename(temp, this.file);
+        this.uncertain = true;
         const directory = await open(dirname(this.file), 'r');
         try {
           await directory.sync();
@@ -83,6 +87,7 @@ export class WishStore {
           await directory.close();
         }
         this.data = draft;
+        this.uncertain = false;
       } finally {
         await rm(temp, { force: true });
       }
