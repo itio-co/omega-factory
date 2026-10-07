@@ -1,0 +1,4 @@
+[submodule ".kido/brains"]
+	path = .kido/brains
+	url = git@gitlab.com:itio-io/kido-brain.git
+	branch = omega-factory
