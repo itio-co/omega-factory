@@ -1,4 +1,13 @@
-import { tickWorld } from './game/transport';
+import {
+  addLinkToDraft,
+  applyLinkDraft,
+  draftCost,
+  draftLinks,
+  removeLinkFromDraft,
+  tickWorld,
+  type LinkDraft,
+} from './game/transport';
+import type { LinkEnd, TransportLink } from './game/transport-model';
 import { createGame } from './game/engine';
 import { SAVE_KEY } from './game/persistence';
 import type { Game } from './game/types';
@@ -15,7 +24,13 @@ import {
   FACTORY_BUDGET,
 } from './game/collection';
 import { applyFactoryDraft } from './game/factory';
-type EditSnapshot = { game: Game; balance: number; spent: number; dirty: boolean };
+type EditSnapshot = {
+  game: Game;
+  balance: number;
+  spent: number;
+  dirty: boolean;
+  links?: TransportLink[] | null;
+};
 
 export class Session {
   game = $state.raw<Game>(createGame());
@@ -171,6 +186,7 @@ export class Session {
       balance: this.balanceDelta,
       spent: this.spentDelta,
       dirty: this.dirty,
+      links: this.linkDraft?.links ?? null,
     };
   }
   private syncDraft() {
@@ -243,6 +259,9 @@ export class Session {
     this.balanceDelta = snapshot.balance;
     this.spentDelta = snapshot.spent;
     this.dirty = snapshot.dirty;
+    if (snapshot.links === null) this.linkDraft = null;
+    else if (snapshot.links && this.linkDraft)
+      this.linkDraft = { ...this.linkDraft, links: snapshot.links };
     this.selected = null;
     this.connecting = null;
     this.syncDraft();
@@ -261,7 +280,73 @@ export class Session {
     this.redoStack = this.redoStack.slice(0, -1);
     this.restore(next);
   }
+  /** Pending transport-link edits for the active World (applied separately, no downtime). */
+  linkDraft = $state.raw<LinkDraft | null>(null);
+  linkFrom = $state<LinkEnd | null>(null);
+  selectedLink = $state<string | null>(null);
+  get links(): TransportLink[] {
+    return this.linkDraft?.world === this.collection.activeWorld
+      ? this.linkDraft.links
+      : this.worldThing.links;
+  }
+  get linkDirty() {
+    const draft = this.linkDraft;
+    if (!draft || draft.world !== this.collection.activeWorld) return false;
+    const ids = (l: TransportLink[]) => l.map((x) => x.id).join();
+    return ids(draft.links) !== ids(this.worldThing.links);
+  }
+  get linkCost() {
+    return this.linkDirty
+      ? Object.values(draftCost(this.collection, this.linkDraft!)).reduce((a, b) => a + b, 0)
+      : 0;
+  }
+  private editLinks(change: (draft: LinkDraft) => LinkDraft) {
+    try {
+      this.storeActive();
+      const base =
+        this.linkDraft?.world === this.collection.activeWorld
+          ? this.linkDraft
+          : draftLinks(this.collection);
+      const next = change(base);
+      this.undoStack = [...this.undoStack.slice(-29), { ...this.snapshot(), links: base.links }];
+      this.redoStack = [];
+      this.linkDraft = next;
+      return true;
+    } catch (error) {
+      this.notify(error instanceof Error ? error.message : 'That link could not be made.');
+      return false;
+    } finally {
+      this.linkFrom = null;
+    }
+  }
+  addLink(from: LinkEnd, to: LinkEnd) {
+    if (this.editLinks((d) => addLinkToDraft(this.collection, d, from, to)))
+      this.notify('Transport link added · draft');
+  }
+  removeLink(id: string) {
+    if (this.editLinks((d) => removeLinkFromDraft(d, id))) this.selectedLink = null;
+  }
+  discardLinks() {
+    this.linkDraft = null;
+    this.linkFrom = null;
+    this.selectedLink = null;
+  }
+  applyLinks() {
+    if (!this.linkDirty) return;
+    try {
+      this.storeActive();
+      this.collection = applyLinkDraft(this.collection, this.linkDraft!);
+      this.game = activeFactory(this.collection).game;
+      this.syncDraft();
+      this.discardLinks();
+      this.save(true);
+      this.notify('Transport links applied.');
+    } catch (error) {
+      this.notify(error instanceof Error ? error.message : 'Could not apply these links.');
+    }
+  }
   discardDraft() {
+    this.discardLinks();
     this.draft = null;
     this.dirty = false;
     this.balanceDelta = 0;
@@ -275,7 +360,9 @@ export class Session {
     if (!this.draft || !this.dirty) return;
     try {
       this.game = applyFactoryDraft(this.game, this.draft, this.balanceDelta, this.spentDelta);
+      const links = this.linkDraft;
       this.discardDraft();
+      this.linkDraft = links;
       this.view = 'world';
       this.save(true);
       this.notify(

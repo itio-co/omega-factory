@@ -275,7 +275,7 @@
           >Factory interior {session.dirty ? '· Draft' : ''}</button
         >
       </div>
-      {#if session.view === 'interior' || session.dirty}
+      {#if session.view === 'interior' || session.dirty || session.linkDirty}
         <div class="draft-banner">
           <span
             ><strong>Layout draft</strong> · Live factory keeps running. Apply to update; unapplied drafts
@@ -285,8 +285,10 @@
             <button
               class="text-button"
               onclick={() => session.discardDraft()}
-              disabled={!session.dirty}>Discard draft</button
-            ><button
+              disabled={!session.dirty && !session.linkDirty}>Discard draft</button
+            >{#if session.linkDirty}<button class="primary" onclick={() => session.applyLinks()}
+                >Apply transport links · {session.linkCost} CR</button
+              >{/if}<button
               class="primary"
               disabled={!session.dirty ||
                 session.game.state.factory.downtime > 0 ||
