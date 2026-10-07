@@ -2,12 +2,19 @@ import { z } from 'zod';
 import { createGame } from './engine';
 import { deserialize } from './persistence';
 import type { Game } from './types';
+import { sanitizeLinks, type TransportLink } from './transport-model';
 
 export type EnclosureCategory = { id: string; name: string; template: 'world' | 'factory' };
 export type FactoryThing = { id: string; name: string; category: string; game: Game };
-export type WorldThing = { id: string; name: string; category: string; factories: FactoryThing[] };
+export type WorldThing = {
+  id: string;
+  name: string;
+  category: string;
+  factories: FactoryThing[];
+  links: TransportLink[];
+};
 export type Collection = {
-  version: 2;
+  version: 3;
   nextId: number;
   categories: EnclosureCategory[];
   worlds: WorldThing[];
@@ -18,7 +25,7 @@ export const FACTORY_PRICE = 500,
   FACTORY_BUDGET = 1000;
 export function createCollection(game = createGame()): Collection {
   return {
-    version: 2,
+    version: 3,
     nextId: 3,
     categories: [
       { id: 'world', name: 'World', template: 'world' },
@@ -30,6 +37,7 @@ export function createCollection(game = createGame()): Collection {
         name: 'Local world',
         category: 'world',
         factories: [{ id: 'factory-2', name: 'My first factory', category: 'factory', game }],
+        links: [],
       },
     ],
     activeWorld: 'world-1',
@@ -75,6 +83,7 @@ export function addWorld(book: Collection, categoryId: string): Collection {
     factories: [
       { id: factoryId, name: 'My first factory', category: 'factory', game: createGame() },
     ],
+    links: [],
   });
   next.activeWorld = id;
   next.activeFactory = factoryId;
@@ -115,7 +124,7 @@ const identifier = z
 const name = z.string().trim().min(1).max(80);
 const schema = z
   .object({
-    version: z.literal(2),
+    version: z.union([z.literal(2), z.literal(3)]),
     nextId: z.number().int().min(3).max(1000000),
     categories: z
       .array(
@@ -140,6 +149,7 @@ const schema = z
               )
               .min(1)
               .max(16),
+            links: z.unknown().optional(),
           })
           .strict(),
       )
@@ -183,17 +193,17 @@ export function readCollection(text: string): Collection {
     register(w.id);
     if (!data.categories.some((c) => c.id === w.category && c.template === 'world'))
       throw new Error('Invalid World category.');
-    return {
-      ...w,
-      factories: w.factories.map((f) => {
-        register(f.id);
-        if (!data.categories.some((c) => c.id === f.category && c.template === 'factory'))
-          throw new Error('Invalid Factory category.');
-        return { ...f, game: deserialize(JSON.stringify(f.game)) };
-      }),
-    };
+    const factories = w.factories.map((f) => {
+      register(f.id);
+      if (!data.categories.some((c) => c.id === f.category && c.template === 'factory'))
+        throw new Error('Invalid Factory category.');
+      return { ...f, game: deserialize(JSON.stringify(f.game)) };
+    });
+    // v2 had no links; v3 links are sanitized (invalid ones dropped, never fatal).
+    const links = data.version === 2 ? [] : sanitizeLinks(w.links, factories, data.nextId);
+    return { ...w, factories, links };
   });
-  const book: Collection = { ...data, worlds };
+  const book: Collection = { ...data, version: 3, worlds };
   if (!activeWorld(book) || !activeFactory(book))
     throw new Error('The selected Thing is outside this scope.');
   return book;
