@@ -13,16 +13,16 @@ A **transport link** joins one factory's **Outlet** (an `export` node, scope por
 `outlet`) to another factory's **Inlet** (an `import` node, scope port `inlet`) inside
 the **same World**.
 
-| Field | Meaning |
-|---|---|
-| `id` | `link-N`, allocated from the Collection's `nextId`. |
-| `from` | `{ factory, node }` — source Factory Thing id and its Outlet node id. |
-| `to` | `{ factory, node }` — destination Factory Thing id and its Inlet node id. |
+| Field      | Meaning                                                                                                                              |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `id`       | `link-N`, allocated from the Collection's `nextId`.                                                                                  |
+| `from`     | `{ factory, node }` — source Factory Thing id and its Outlet node id.                                                                |
+| `to`       | `{ factory, node }` — destination Factory Thing id and its Inlet node id.                                                            |
 | `resource` | The single resource the link carries _(provisional: one type per link, no bundles)_. Must equal the resource of both endpoint nodes. |
-| `level` | 1–3, sets capacity (§3). |
-| `delay` | Transit time in ticks, fixed at build time from World-map distance (§2). Integer ≥ 1. |
-| `enabled` | Disabled links accept nothing; goods already in transit still arrive. |
-| `transit` | Packets in flight: `{ amount, remaining }[]`, `remaining` in `1..delay`, `amount` in `1..capacity`. At most `delay` packets. |
+| `level`    | 1–3, sets capacity (§3).                                                                                                             |
+| `delay`    | Transit time in ticks, fixed at build time from World-map distance (§2). Integer ≥ 1.                                                |
+| `enabled`  | Disabled links accept nothing; goods already in transit still arrive.                                                                |
+| `transit`  | Packets in flight: `{ amount, remaining }[]`, `remaining` in `1..delay`, `amount` in `1..capacity`. At most `delay` packets.         |
 
 Rules:
 
@@ -72,11 +72,11 @@ customer/contracts, the link changes where value is earned, not how much is prod
 _(provisional)_ **Build cost only, no per-unit or per-tick upkeep**, paid from the
 **source factory's** credits (the factory owning the Outlet). Counts toward its `spent`.
 
-| Level | Capacity (units/tick) | Cost to reach (CR) |
-|---|---|---|
-| 1 (build) | 2 | 250 |
-| 2 | 4 | 400 |
-| 3 | 6 | 650 |
+| Level     | Capacity (units/tick) | Cost to reach (CR) |
+| --------- | --------------------- | ------------------ |
+| 1 (build) | 2                     | 250                |
+| 2         | 4                     | 400                |
+| 3         | 6                     | 650                |
 
 Values are placeholders to tune in M4 (task 5.1.1).
 
