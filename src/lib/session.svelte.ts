@@ -282,7 +282,7 @@ export class Session {
   }
   /** Pending transport-link edits for the active World (applied separately, no downtime). */
   linkDraft = $state.raw<LinkDraft | null>(null);
-  linkFrom = $state<LinkEnd | null>(null);
+  linkFrom = $state.raw<LinkEnd | null>(null);
   selectedLink = $state<string | null>(null);
   get links(): TransportLink[] {
     return this.linkDraft?.world === this.collection.activeWorld
@@ -320,7 +320,8 @@ export class Session {
     }
   }
   addLink(from: LinkEnd, to: LinkEnd) {
-    if (this.editLinks((d) => addLinkToDraft(this.collection, d, from, to)))
+    const plain = (e: LinkEnd) => ({ factory: e.factory, node: e.node });
+    if (this.editLinks((d) => addLinkToDraft(this.collection, d, plain(from), plain(to))))
       this.notify('Transport link added · draft');
   }
   removeLink(id: string) {
