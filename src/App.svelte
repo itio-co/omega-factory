@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from 'svelte';
+  import { onMount, tick } from 'svelte';
   import {
     Activity,
     Flag,
@@ -25,6 +25,14 @@
     X,
   } from '@lucide/svelte';
   import { modal } from './lib/modal';
+  import WishForm from './lib/components/WishForm.svelte';
+  let showWish = $state(false);
+  let wishButton: HTMLButtonElement;
+  async function closeWish() {
+    showWish = false;
+    await tick();
+    wishButton?.focus();
+  }
   import { Session } from './lib/session.svelte';
   import { addNode, connect, diagnose, disconnect } from './lib/game/engine';
   import { CATALOG, total } from './lib/game/catalog';
@@ -95,6 +103,10 @@
   function onKey(event: KeyboardEvent) {
     const target = event.target as HTMLElement;
     if (event.key === 'Escape') {
+      if (showWish) {
+        void closeWish();
+        return;
+      }
       session.panel = 'factory';
       session.connecting = null;
       showFiles = false;
@@ -105,7 +117,8 @@
       target.closest('input, textarea, select, button, [contenteditable=true]') ||
       session.welcome ||
       session.panel !== 'factory' ||
-      showReset
+      showReset ||
+      showWish
     )
       return;
     if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') {
@@ -151,7 +164,11 @@
 </script>
 
 <svelte:window onkeydown={onKey} />
-<div class="app-shell" inert={session.welcome || session.panel !== 'factory' || showReset}>
+<WishForm open={showWish} onclose={closeWish} />
+<div
+  class="app-shell"
+  inert={session.welcome || session.panel !== 'factory' || showReset || showWish}
+>
   <header class="topbar">
     <div class="brand" aria-label="Omega Factory">
       <span class="brand-mark">Ω</span><span
@@ -168,6 +185,9 @@
       ><ChevronDown size={14} />
     </div>
     <div class="top-actions">
+      <button class="secondary" bind:this={wishButton} onclick={() => (showWish = true)}
+        ><Sparkles size={16} />Make a Wish</button
+      >
       <span class="credits"
         ><Coins size={17} /><strong data-testid="credits"
           >{game.state.credits.toLocaleString()}</strong

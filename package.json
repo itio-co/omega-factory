@@ -11,13 +11,15 @@
     "build": "vite build",
     "preview": "vite preview --host 0.0.0.0",
     "check": "svelte-check --tsconfig ./tsconfig.json",
-    "test": "vitest run",
+    "test": "vitest run && npm run test:server",
     "test:e2e": "playwright test",
     "desktop": "npm run build && electron .",
     "package:desktop": "npm run build && electron-builder --dir",
     "dist:desktop": "npm run build && electron-builder",
     "format": "prettier --write .",
-    "format:check": "prettier --check ."
+    "format:check": "prettier --check .",
+    "server": "node server/main.mjs",
+    "test:server": "node --test server/*.test.mjs"
   },
   "build": {
     "appId": "io.itio.omegafactory",
@@ -53,6 +55,7 @@
   "dependencies": {
     "@lucide/svelte": "^1.52.0",
     "@threlte/core": "^8.6.1",
+    "js-yaml": "^4.3.2",
     "svelte": "^5.57.2",
     "three": "^0.186.1",
     "zod": "^4.6.5"

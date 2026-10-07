@@ -156,3 +156,13 @@ and Kubernetes ingress deployment are pending stories, not implemented services.
 Wish scope: submit → `/kido create story` immediately → later `/kido code` →
 validate → `/kido deploy dev`. The server will be added to this project when that
 story is activated.
+
+## Player Wishes
+
+**Make a Wish** submits game ideas to a durable YAML-backed API and immediately
+creates a pending Kido story. Run `npm run server` alongside the game; configure
+its installed Kido skill and writable brain checkout first. The optional Claude
+Code development/deployment worker is disabled by default.
+
+See [Wish server and worker operation](docs/WISHES.md) for setup, endpoint/storage
+configuration, retry behavior, persistent volumes, and worker recovery.
