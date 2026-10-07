@@ -1,0 +1,12 @@
+.git
+.kido
+node_modules
+dist
+release
+test-results
+playwright-report
+.superpowers
+docs
+tests
+*.log
+.env*
