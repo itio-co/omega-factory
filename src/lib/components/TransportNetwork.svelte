@@ -20,7 +20,7 @@
   let { session }: { session: Session } = $props();
 
   const CARD = 230,
-    GAP = 90,
+    GAP = 220,
     ROW = 36,
     TOP = 92;
   const world = $derived(session.worldThing);
