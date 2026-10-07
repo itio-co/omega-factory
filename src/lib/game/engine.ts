@@ -270,8 +270,8 @@ export function tick(game: Game, linkedPorts: ReadonlySet<string> = new Set()): 
         target = byId.get(edge.to);
       if (
         !target?.enabled ||
-        linkedPorts.has(source.id) ||
-        linkedPorts.has(target.id) ||
+        (linkedPorts.has(source.id) && CATALOG[source.kind].scopePort === 'outlet') ||
+        (linkedPorts.has(target.id) && CATALOG[target.kind].scopePort === 'inlet') ||
         resource !== inputResource(target) ||
         budgets[source.id][resource] < 1
       )
