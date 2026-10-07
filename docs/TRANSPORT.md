@@ -1,8 +1,9 @@
 # Cross-factory transport (spec, v1)
 
-Status: **M1 spec** for kido `omega-things-cross-factory-transport`. Data model and
-save format are implemented (`src/lib/game/transport-model.ts`, Collection v3); the
-tick mechanic (M2) and World-map UI (M3) are not yet.
+Status: **M1 + M2** for kido `omega-things-cross-factory-transport`. Data model and
+save format (`transport-model.ts`, Collection v3) and the mechanic (`transport.ts`:
+validation, draft/apply/undo, `tickWorld`; `session.step` ticks per World) are
+implemented. The World-map UI (M3) is not yet.
 
 Defaults marked _(provisional)_ were chosen without a user answer and can be revisited;
 see the kido `decisions.md`.
