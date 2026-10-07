@@ -205,7 +205,11 @@ export function claimContract(game: Game): Game {
   return claimQuest(game, LEGACY_QUEST_IDS[game.state.contractIndex]);
 }
 
-export function tick(game: Game): Game {
+/**
+ * `linkedPorts`: Outlet/Inlet node ids owned by a transport link (docs/TRANSPORT.md).
+ * A linked Inlet is supplied only by its link; a linked Outlet only feeds its link.
+ */
+export function tick(game: Game, linkedPorts: ReadonlySet<string> = new Set()): Game {
   const next = structuredClone(game),
     { nodes, connections } = next.definition,
     state = next.state;
@@ -266,6 +270,8 @@ export function tick(game: Game): Game {
         target = byId.get(edge.to);
       if (
         !target?.enabled ||
+        linkedPorts.has(source.id) ||
+        linkedPorts.has(target.id) ||
         resource !== inputResource(target) ||
         budgets[source.id][resource] < 1
       )
