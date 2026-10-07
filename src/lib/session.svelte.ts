@@ -1,4 +1,5 @@
-import { createGame, tick } from './game/engine';
+import { tickWorld } from './game/transport';
+import { createGame } from './game/engine';
 import { SAVE_KEY } from './game/persistence';
 import type { Game } from './game/types';
 import {
@@ -285,17 +286,15 @@ export class Session {
     }
   }
   step() {
-    this.game = tick(this.game);
-    this.collection = {
-      ...this.collection,
-      worlds: this.collection.worlds.map((w) => ({
+    const active = this.collection.activeFactory;
+    const worlds = this.collection.worlds.map((w) =>
+      tickWorld({
         ...w,
-        factories: w.factories.map((f) => ({
-          ...f,
-          game: f.id === this.collection.activeFactory ? this.game : tick(f.game),
-        })),
-      })),
-    };
+        factories: w.factories.map((f) => (f.id === active ? { ...f, game: this.game } : f)),
+      }),
+    );
+    this.collection = { ...this.collection, worlds };
+    this.game = activeFactory(this.collection).game;
     this.syncDraft();
   }
   save(silent = false) {
