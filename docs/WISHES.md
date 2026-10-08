@@ -72,6 +72,10 @@ are used only in the in-memory limiter, never stored with Wishes.
 For Electron builds, set an absolute `VITE_WISH_API_URL` at build time. A `file://`
 client has the origin `null`; supporting it requires explicitly adding `null` to
 `WISH_ORIGINS`. There is no server or credential bundled into the desktop client.
+Today packaged desktop builds never show Wishes: they load from `file://`, where the
+`config.json` fetch fails (and the bundled file says `false` anyway), so the flag
+reads as off and there is no runtime switch for ops. Enabling Wishes on desktop
+would need its own flag source.
 
 ## Container image
 
