@@ -17,6 +17,8 @@ imports `omega-factory:<full-commit-sha>-<image-config-sha>` into the kind node'
 (`docker save | docker exec -i ${KIND_CLUSTER:-dev}-control-plane ctr -n k8s.io images import --no-unpack -`;
 containerd lists it as `docker.io/library/omega-factory:…`), applies the manifests, waits
 for readiness, then checks local and public ingress including asset MIME types.
+The ingress only has host rules, so the local check sends `Host: grok-bot.itio.space`
+(`verify-deployment.py --host`).
 It stops on failure. Receipts live in `git rev-parse --git-path omega-factory-deploy`;
 Kido additionally stores its deployment receipt in the story brain.
 
