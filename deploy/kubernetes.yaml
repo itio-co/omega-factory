@@ -1,0 +1,86 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: omega-factory-dev
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: omega-factory
+  namespace: omega-factory-dev
+spec:
+  replicas: 1
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels: { app: omega-factory }
+  template:
+    metadata:
+      labels: { app: omega-factory }
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: web
+          image: omega-factory:render-required
+          imagePullPolicy: Never
+          ports:
+            - { name: http, containerPort: 8080 }
+          readinessProbe:
+            httpGet: { path: /omega-factory/healthz, port: http }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /omega-factory/healthz, port: http }
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 25m, memory: 32Mi }
+            limits: { cpu: 250m, memory: 128Mi }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+      volumes:
+        - name: tmp
+          emptyDir: { sizeLimit: 32Mi }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: omega-factory
+  namespace: omega-factory-dev
+spec:
+  selector: { app: omega-factory }
+  ports:
+    - { name: http, port: 80, targetPort: http }
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: omega-factory
+  namespace: omega-factory-dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: grok-bot.itio.space
+      http:
+        paths:
+          - path: /omega-factory
+            pathType: Prefix
+            backend:
+              service:
+                name: omega-factory
+                port: { name: http }
+    - host: grok-bot.tailbe69ab.ts.net
+      http:
+        paths:
+          - path: /omega-factory
+            pathType: Prefix
+            backend:
+              service:
+                name: omega-factory
+                port: { name: http }
