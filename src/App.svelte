@@ -26,8 +26,12 @@
   } from '@lucide/svelte';
   import { modal } from './lib/modal';
   import WishForm from './lib/components/WishForm.svelte';
+  import { ALL_OFF, loadFeatures } from './lib/features';
+  // Runtime flags from config.json; everything stays hidden until they load as on.
+  let features = $state.raw(ALL_OFF);
+  void loadFeatures().then((loaded) => (features = loaded));
   let showWish = $state(false);
-  let wishButton: HTMLButtonElement;
+  let wishButton = $state<HTMLButtonElement>();
   async function closeWish() {
     showWish = false;
     await tick();
@@ -164,7 +168,7 @@
 </script>
 
 <svelte:window onkeydown={onKey} />
-<WishForm open={showWish} onclose={closeWish} />
+{#if features.wishes}<WishForm open={showWish} onclose={closeWish} />{/if}
 <div
   class="app-shell"
   inert={session.welcome || session.panel !== 'factory' || showReset || showWish}
@@ -185,9 +189,11 @@
       ><ChevronDown size={14} />
     </div>
     <div class="top-actions">
-      <button class="secondary" bind:this={wishButton} onclick={() => (showWish = true)}
-        ><Sparkles size={16} />Make a Wish</button
-      >
+      {#if features.wishes}<button
+          class="secondary"
+          bind:this={wishButton}
+          onclick={() => (showWish = true)}><Sparkles size={16} />Make a Wish</button
+        >{/if}
       <span class="credits"
         ><Coins size={17} /><strong data-testid="credits"
           >{game.state.credits.toLocaleString()}</strong
