@@ -1,4 +1,5 @@
 import { createServer } from 'node:http';
+import { isIP } from 'node:net';
 import { z } from 'zod';
 
 const input = z
@@ -8,9 +9,27 @@ const input = z
       .string()
       .min(1)
       .max(4000)
-      .refine((t) => t.trim().length > 0),
+      .refine((t) => t.trim().length > 0)
+      // No NUL, other C0 controls, DEL or C1 controls; tab and newline are allowed.
+      .refine((t) => !/[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/.test(t)),
   })
   .strict();
+/**
+ * Rate-limit key. With `trustProxy` hops of trusted reverse proxies, each appends the
+ * address it received from, so the client is the entry `trustProxy` from the right of
+ * X-Forwarded-For. Entries further left are client-supplied and never used. A missing,
+ * too-short or malformed header falls back to the socket address.
+ */
+export function clientAddress(req, trustProxy = 0) {
+  const socket = req.socket.remoteAddress;
+  if (!(trustProxy >= 1)) return socket;
+  const header = req.headers['x-forwarded-for'];
+  if (typeof header !== 'string') return socket;
+  const hops = header.split(',').map((entry) => entry.trim());
+  const entry = hops[hops.length - trustProxy];
+  return entry && isIP(entry) ? entry : socket;
+}
+
 const publicWish = (w) => ({
   id: w.id,
   status: w.status,
@@ -25,6 +44,8 @@ export function createWishServer({
   createStory,
   origins = [],
   rateLimit = 10,
+  trustProxy = 0,
+  enabled = false,
   onError = () => {},
 }) {
   const pending = new Map();
@@ -67,7 +88,8 @@ export function createWishServer({
     };
     try {
       if (req.url === '/healthz' && req.method === 'GET') return send(200, { status: 'ok' });
-      if (req.url !== '/api/wishes') return send(404, { message: 'Not found' });
+      // WISH_ENABLED gates the whole route; while off it is indistinguishable from unknown paths.
+      if (req.url !== '/api/wishes' || !enabled) return send(404, { message: 'Not found' });
       const origin = req.headers.origin;
       if (origin && !origins.includes(origin))
         return send(403, { message: 'This game origin is not allowed.' });
@@ -101,21 +123,21 @@ export function createWishServer({
         return send(400, { message: 'Use a request UUID and 1–4000 characters of Wish text.' });
       }
       const { requestId, text } = decoded;
+      // Every valid submission counts, retries included: a retry of a pending Wish
+      // re-runs story creation and its Git fetch/push.
+      const now = Date.now();
+      for (const [key, value] of rates) if (value.until <= now) rates.delete(key);
+      const key = clientAddress(req, trustProxy);
+      const rate = rates.get(key) ?? { count: 0, until: now + 60000 };
+      if (rate.count >= rateLimit) {
+        res.setHeader('Retry-After', '60');
+        return send(429, { message: 'Too many Wishes. Please retry in a minute.' });
+      }
+      rate.count++;
+      rates.set(key, rate);
       const existing = store.read().wishes.find((w) => w.id === requestId);
       if (existing && existing.text !== text)
         return send(409, { message: 'This request ID already belongs to a different Wish.' });
-      if (!existing) {
-        const now = Date.now();
-        for (const [key, value] of rates) if (value.until <= now) rates.delete(key);
-        const key = req.socket.remoteAddress;
-        const rate = rates.get(key) ?? { count: 0, until: now + 60000 };
-        if (rate.count >= rateLimit) {
-          res.setHeader('Retry-After', '60');
-          return send(429, { message: 'Too many Wishes. Please retry in a minute.' });
-        }
-        rate.count++;
-        rates.set(key, rate);
-      }
       let conflict = false,
         created = false;
       const saved = await store.mutate((db) => {

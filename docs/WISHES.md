@@ -16,7 +16,7 @@ or network-filesystem lock.
 ```sh
 npm ci
 # In one terminal:
-WISH_KIDO_ROOT=/path/to/kido-skill npm run server
+WISH_ENABLED=1 WISH_KIDO_ROOT=/path/to/kido-skill npm run server
 # In another terminal:
 npm run dev
 ```
@@ -29,26 +29,60 @@ checkout to its project branch before running the service.
 
 | Variable                 | Default / meaning                                                               |
 | ------------------------ | ------------------------------------------------------------------------------- |
+| `WISH_ENABLED`           | Off unless `1`; while off, `/api/wishes` answers 404 and stores nothing         |
 | `WISH_PROJECT_ROOT`      | Current directory, the game repository                                          |
 | `WISH_PROJECT`           | `omega-factory`, also the brain branch                                          |
+| `WISH_REMOTE`            | `github` (default), `gitlab` or `none`; replaces a new story's `remote: none`   |
 | `WISH_BRAINS`            | `<project-root>/.kido/brains`                                                   |
 | `WISH_KIDO_ROOT`         | `~/.codex/skills/kido`, the complete installed skill                            |
 | `WISH_STORE`             | `<project-root>/var/wishes.yaml`                                                |
 | `WISH_HOST`, `WISH_PORT` | `127.0.0.1`, `8787`                                                             |
 | `WISH_ORIGINS`           | Comma-separated exact origins; defaults to localhost and 127.0.0.1 on port 5173 |
-| `WISH_RATE_LIMIT`        | 10 new submissions per connection address per minute; memory-only               |
+| `WISH_RATE_LIMIT`        | 10 valid submissions, retries included, per client address per minute; memory   |
+| `WISH_TRUST_PROXY`       | `0`; number of trusted reverse-proxy hops in front (see below)                  |
 | `WISH_PROXY_TARGET`      | Vite only: `http://127.0.0.1:8787`                                              |
 | `VITE_WISH_API_URL`      | Client build: `/api/wishes`, or an absolute endpoint URL                        |
 
 For a hosted game, proxy `/api/wishes` to the server and set the exact public game
-origin. Rate limits use the connection address; forwarded IP headers are not
-trusted. Apply per-client limits at a trusted reverse proxy if needed. The endpoint
+origin. Rate limits key on the connection address by default. Behind trusted
+reverse proxies set `WISH_TRUST_PROXY` to their number of hops (`1` for a single
+ingress-nginx): the client address is then the `X-Forwarded-For` entry that many
+hops from the right, because each trusted proxy appends the address it received
+from. Entries further left are client-supplied and ignored. A missing, too-short or
+malformed header falls back to the connection address. Only set it when every
+request really passes through those proxies, or clients can choose their key. The endpoint
 is anonymous; origins are browser restrictions, not authentication. IP addresses
 are used only in the in-memory limiter, never stored with Wishes.
 
 For Electron builds, set an absolute `VITE_WISH_API_URL` at build time. A `file://`
 client has the origin `null`; supporting it requires explicitly adding `null` to
 `WISH_ORIGINS`. There is no server or credential bundled into the desktop client.
+
+## Container image
+
+`Dockerfile.server` packages only the submission server: Node 24 slim with `git`,
+`python3`, PyYAML, `flock` and `tini`, running as `node` (UID/GID 1000) on
+`0.0.0.0:8787`. The worker modules (`worker.mjs`, `claude.mjs`), tests and the npm
+toolchain are not in the image, so `WISH_WORKER_ENABLED=1` fails at startup there. Build committed source:
+
+```sh
+git archive HEAD | docker build -f Dockerfile.server -t omega-factory-wish:<sha> -
+```
+
+Image defaults: `WISH_STORE=/data/wishes/wishes.yaml`, `WISH_BRAINS=/data/brains`,
+`WISH_KIDO_ROOT=/opt/kido`. Mount, writable by UID 1000, a persistent volume at
+`/data/wishes`, and a dedicated brain clone at `/data/brains` on branch
+`omega-factory` whose `origin` is an HTTPS URL the pod can push to (there is no SSH
+client; use a Git credential helper backed by a token Secret). Mount the Kido skill
+(read-only) at `/opt/kido` so `/opt/kido/scripts/kido-brain.py` exists. Set
+`WISH_ORIGINS` to the public game origin and the Git identity through
+`GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL`.
+Behind ingress-nginx set `WISH_TRUST_PROXY=1`. Set `WISH_ENABLED=1` only once Wishes
+are approved to go live. The server answers exactly `/api/wishes` and
+`/healthz`; a prefixed ingress path must be rewritten to them.
+
+The game client reads `VITE_WISH_API_URL` at build time (default `/api/wishes`);
+a game image served under a path prefix must pass the prefixed endpoint to its build.
 
 ## API and durable data
 
@@ -61,7 +95,8 @@ client has the origin `null`; supporting it requires explicitly adding `null` to
 }
 ```
 
-Text must be nonblank and at most 4000 UTF-16 code units, with a 32 KiB request
+Text must be nonblank, at most 4000 UTF-16 code units and free of control characters
+(NUL, other C0, DEL and C1; tab and newline are allowed), with a 32 KiB request
 limit. Unicode, whitespace and newlines are preserved. `requestId` is a UUID, normalized to lowercase.
 Repeating the same identity and text reconciles the same Wish; changing the text
 under that identity returns 409. The form saves text and identity locally, retains
@@ -74,6 +109,8 @@ them across reload/retry, and locks the text after attempting submission.
   request. This is not a story-creation success.
 - **400 / 413 / 415**: invalid input / body too large / wrong content type.
 - **403 / 429 / 503**: disallowed origin / rate limit / confirmation unavailable.
+  Retries of the same Wish count toward the rate limit.
+- **404**: `WISH_ENABLED` is not `1` (the route is off).
 
 `GET /healthz` reports process health. No public listing or worker-control endpoint
 is exposed. Pending stories are reconciled when their original request is retried.

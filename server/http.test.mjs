@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import yaml from 'js-yaml';
 import { WishStore } from './store.mjs';
-import { createWishServer } from './http.mjs';
+import { createWishServer, clientAddress } from './http.mjs';
 
 async function fixture(
   t,
@@ -15,6 +15,7 @@ async function fixture(
     slug: `wish-${w.id}`,
     path: `omega-factory/202610/20261007120000_wish-${w.id}`,
   }),
+  options = {},
 ) {
   const dir = await mkdtemp(join(tmpdir(), 'wish-api-'));
   const file = join(dir, 'wishes.yaml');
@@ -25,7 +26,9 @@ async function fixture(
       store,
       createStory,
       rateLimit: 100,
+      enabled: true,
       origins: ['http://localhost:5173'],
+      ...options,
     });
     await new Promise((r) => server.listen(0, '127.0.0.1', r));
   }
@@ -47,6 +50,7 @@ async function fixture(
       await stop();
       await start();
     },
+    url: (path) => `http://127.0.0.1:${server.address().port}${path}`,
     post: (body, headers = {}) =>
       fetch(`http://127.0.0.1:${server.address().port}/api/wishes`, {
         method: 'POST',
@@ -175,5 +179,108 @@ test('an uncertain disk flush cannot let stale memory overwrite the renamed file
   assert.deepEqual(
     f.store.read().wishes.map((w) => w.id),
     [first.requestId],
+  );
+});
+
+test('rejects NUL, C0, DEL and C1 control characters but keeps tab and newline', async (t) => {
+  const f = await fixture(t);
+  for (const bad of [
+    'a\u0000b',
+    'bell\u0007',
+    'cr\r\n',
+    '\u001b[31mred',
+    'del\u007f',
+    'nel\u0085',
+    'csi\u009b2J',
+  ]) {
+    const response = await f.post({ requestId: randomUUID(), text: bad });
+    assert.equal(response.status, 400, JSON.stringify(bad));
+    assert.match(response.headers.get('content-type'), /application\/json/);
+  }
+  assert.equal(f.store.read().wishes.length, 0);
+  const ok = { requestId: randomUUID(), text: 'tab\there\nnext line ไทย 🌱' };
+  assert.equal((await f.post(ok)).status, 201);
+  assert.equal(f.store.read().wishes[0].text, ok.text);
+});
+
+test('retries of an existing Wish count against the rate limit, so they cannot repeat Git work', async (t) => {
+  let calls = 0;
+  const f = await fixture(
+    t,
+    async () => {
+      calls++;
+      throw new Error('brain unavailable');
+    },
+    { rateLimit: 2 },
+  );
+  const b = { requestId: randomUUID(), text: 'Keep retrying' };
+  assert.equal((await f.post(b)).status, 202);
+  assert.equal((await f.post(b)).status, 202);
+  const limited = await f.post(b);
+  assert.equal(limited.status, 429);
+  assert.equal(limited.headers.get('retry-after'), '60');
+  assert.equal(calls, 2);
+});
+
+test('clientAddress takes the trusted hop from the right of X-Forwarded-For and falls back safely', () => {
+  const req = (xff) => ({
+    socket: { remoteAddress: '10.244.0.7' },
+    headers: xff === undefined ? {} : { 'x-forwarded-for': xff },
+  });
+  assert.equal(clientAddress(req('203.0.113.5'), 0), '10.244.0.7');
+  assert.equal(clientAddress(req('203.0.113.5')), '10.244.0.7');
+  assert.equal(clientAddress(req('203.0.113.5'), 1), '203.0.113.5');
+  // A client-supplied prefix never changes the key for one trusted hop.
+  for (const spoof of ['1.1.1.1, ', 'evil, ', '198.51.100.1, 198.51.100.2, ', ', , '])
+    assert.equal(clientAddress(req(`${spoof}203.0.113.5`), 1), '203.0.113.5');
+  assert.equal(clientAddress(req('1.1.1.1, 2001:db8::1, 10.0.0.2'), 2), '2001:db8::1');
+  for (const bad of [
+    undefined,
+    '',
+    'not-an-ip',
+    '203.0.113.5, ',
+    '203.0.113.5:443',
+    '[2001:db8::1]',
+  ])
+    assert.equal(clientAddress(req(bad), 1), '10.244.0.7', String(bad));
+  assert.equal(clientAddress(req('203.0.113.5'), 2), '10.244.0.7'); // shorter than the trusted chain
+});
+
+test('behind one trusted proxy, a spoofed X-Forwarded-For prefix cannot escape the rate limit', async (t) => {
+  const f = await fixture(t, undefined, { rateLimit: 1, trustProxy: 1 });
+  const wish = () => ({ requestId: randomUUID(), text: 'One per client' });
+  assert.equal((await f.post(wish(), { 'x-forwarded-for': '203.0.113.5' })).status, 201);
+  for (const spoof of ['198.51.100.9, 203.0.113.5', 'anything, 1.2.3.4, 203.0.113.5'])
+    assert.equal((await f.post(wish(), { 'x-forwarded-for': spoof })).status, 429);
+  assert.equal((await f.post(wish(), { 'x-forwarded-for': '203.0.113.6' })).status, 201);
+  // Without the header the socket address is the key (separate bucket).
+  assert.equal((await f.post(wish())).status, 201);
+  assert.equal((await f.post(wish())).status, 429);
+});
+
+test('the Wish route is off unless enabled (WISH_ENABLED=1) and stores nothing', async (t) => {
+  const f = await fixture(t, undefined, { enabled: false });
+  const b = { requestId: randomUUID(), text: 'Not yet' };
+  const response = await f.post(b);
+  assert.equal(response.status, 404);
+  assert.deepEqual(await response.json(), { message: 'Not found' });
+  assert.equal((await fetch(f.url('/api/wishes'), { method: 'OPTIONS' })).status, 404);
+  assert.equal((await fetch(f.url('/healthz'))).status, 200);
+  assert.equal(f.store.read().wishes.length, 0);
+  // The factory default is off as well.
+  const store = { read: () => ({ wishes: [] }) };
+  const server = createWishServer({ store, createStory: async () => {} });
+  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  t.after(() => new Promise((r) => server.close(r)));
+  const port = server.address().port;
+  assert.equal(
+    (
+      await fetch(`http://127.0.0.1:${port}/api/wishes`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify(b),
+      })
+    ).status,
+    404,
   );
 });
