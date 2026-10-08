@@ -161,3 +161,35 @@ test('reconciles remote brain updates before retrying a local story commit', asy
     (await git('rev-parse', 'HEAD')).stdout.trim(),
   );
 });
+
+test('an ownership mismatch stops before any story file is modified', async (t) => {
+  const root = await mkdtemp(join(tmpdir(), 'wish-owner-'));
+  t.after(() => rm(root, { recursive: true, force: true }));
+  const brains = join(root, 'brains'),
+    origin = join(root, 'origin.git');
+  await run('git', ['init', '-b', 'omega-factory', brains]);
+  const git = (...args) => run('git', ['-C', brains, ...args]);
+  await git('config', 'user.email', 'test@example.invalid');
+  await git('config', 'user.name', 'Test');
+  await run('git', ['init', '--bare', origin]);
+  await git('remote', 'add', 'origin', origin);
+  const id = randomUUID(),
+    slug = `wish-${id}`,
+    storyId = `20261007120000_${slug}`;
+  const d = join(brains, 'omega-factory/202610', storyId);
+  await mkdir(d, { recursive: true });
+  const metaText = `---\nid: ${storyId}\nslug: ${slug}\nremote: none\nmr: none\nissue: none\n---\n`;
+  await writeFile(join(d, 'meta.md'), metaText);
+  for (const f of ['plan', 'implement', 'tasks', 'handoff', 'decisions', 'gaps'])
+    await writeFile(join(d, `${f}.md`), 'test');
+  await writeFile(join(d, 'wish.json'), JSON.stringify({ requestId: id, text: 'The original' }));
+  await git('add', '.');
+  await git('commit', '-m', 'story owned by another text');
+  const head = (await git('rev-parse', 'HEAD')).stdout.trim();
+  const create = kidoStoryCreator({ root, brains, project: 'omega-factory', script: '/x' });
+  await assert.rejects(create({ id, text: 'A different text' }), /different Wish data/);
+  assert.equal(await readFile(join(d, 'meta.md'), 'utf8'), metaText);
+  assert.equal((await git('status', '--porcelain', '--', 'omega-factory')).stdout, '');
+  assert.equal((await git('rev-parse', 'HEAD')).stdout.trim(), head);
+  assert.equal((await git('ls-remote', 'origin')).stdout, '');
+});

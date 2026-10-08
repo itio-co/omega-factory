@@ -109,9 +109,6 @@ export function kidoStoryCreator({
       const meta = await readMeta(directory);
       if (meta.id !== story.id || meta.slug !== slug)
         throw new Error('Kido story identity mismatch');
-      // kido-brain.py does not commit; this edit joins the story commit below, or becomes
-      // its own follow-up commit if an earlier attempt already committed the story.
-      await applyRemote(directory, remote);
       for (const name of ['plan', 'implement', 'tasks', 'handoff', 'decisions', 'gaps'])
         await access(join(directory, `${name}.md`));
       const mapping = join(directory, 'wish.json');
@@ -132,6 +129,10 @@ export function kidoStoryCreator({
           mode: 0o600,
         });
       }
+      // Only after ownership is proven may meta.md change. kido-brain.py does not commit;
+      // this edit joins the story commit below, or becomes its own follow-up commit if an
+      // earlier attempt already committed the story.
+      await applyRemote(directory, remote);
       const changed = (await git('status', '--porcelain', '--', story.path)).stdout.trim();
       if (changed) {
         await git('add', '--', story.path);
