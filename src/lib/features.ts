@@ -1,8 +1,11 @@
 /** Feature flags. Every feature ships OFF and is turned on at runtime by ops. */
-const FEATURES = { wishes: 'VITE_FEATURE_WISHES' } as const;
+const FEATURES = {
+  wishes: 'VITE_FEATURE_WISHES',
+  maximizeOnLaunch: 'VITE_FEATURE_MAXIMIZE_ON_LAUNCH',
+} as const;
 export type Feature = keyof typeof FEATURES;
 export type Features = Record<Feature, boolean>;
-export const ALL_OFF: Features = Object.freeze({ wishes: false });
+export const ALL_OFF: Features = Object.freeze({ wishes: false, maximizeOnLaunch: false });
 
 type Env = { DEV?: boolean; [key: string]: unknown };
 
@@ -43,3 +46,7 @@ export async function loadFeatures(
     features[feature] = config?.features?.[feature] === true;
   return { ...features, ...overrides };
 }
+
+let shared: Promise<Features> | undefined;
+/** The app's flags, fetched once per page load and shared by `main.ts` and `App.svelte`. */
+export const appFeatures = (): Promise<Features> => (shared ??= loadFeatures());

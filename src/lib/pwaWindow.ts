@@ -61,10 +61,52 @@ export function maximizeInstalledWindow(win: MaximizableWindow): boolean {
   return true;
 }
 
-/** Maximize now, and again if a browser tab is moved into the app window after install. */
-export function maximizeOnLaunch(win: MaximizableWindow): void {
-  maximizeInstalledWindow(win);
+/** sessionStorage key: this app window already had its one launch-maximize attempt. */
+export const LAUNCH_MARKER = 'omega-factory-launch-maximized';
+type MarkerStorage = Pick<Storage, 'getItem' | 'setItem'>;
+
+function sessionStore(win: MaximizableWindow): MarkerStorage | null {
+  try {
+    return (win as MaximizableWindow & { sessionStorage: Storage }).sessionStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Maximize at most once per app launch. sessionStorage survives reloads within the same
+ * window, so a reload never re-maximizes a window the player restored or resized. The
+ * marker is set on the first check in standalone mode (whether or not a resize was needed);
+ * a browser tab sets nothing, so moving a tab into the app window after install still
+ * gets its one attempt. Without usable storage, nothing is resized.
+ */
+export function maximizeOnLaunch(
+  win: MaximizableWindow,
+  storage: MarkerStorage | null = sessionStore(win),
+): void {
+  const once = () => {
+    if (!win.matchMedia(STANDALONE_QUERY).matches) return;
+    try {
+      if (!storage || storage.getItem(LAUNCH_MARKER)) return;
+      storage.setItem(LAUNCH_MARKER, '1');
+    } catch {
+      return;
+    }
+    maximizeInstalledWindow(win);
+  };
+  once();
   win.matchMedia(STANDALONE_QUERY).addEventListener('change', (event) => {
-    if (event.matches) maximizeInstalledWindow(win);
+    if (event.matches) once();
   });
+}
+
+/** Runtime flag `features.maximizeOnLaunch` (config.json, default off) gates the behaviour. */
+export function maximizeIfEnabled(
+  features: { maximizeOnLaunch: boolean },
+  win: MaximizableWindow,
+  storage?: MarkerStorage | null,
+): boolean {
+  if (!features.maximizeOnLaunch) return false;
+  maximizeOnLaunch(win, storage === undefined ? sessionStore(win) : storage);
+  return true;
 }

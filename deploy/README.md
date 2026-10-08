@@ -78,14 +78,26 @@ The game image bakes in its Wish endpoint at build time:
 `--build-arg VITE_WISH_API_URL=...`. The Wish server image, its Deployment/Service and
 PVC are separate work. Do not put Wish YAML on the nginx temporary volume.
 
-### Turning Wishes on (runtime flag)
+### Turning features on (runtime flags)
 
-The image serves `/omega-factory/config.json` with `{"features":{"wishes":false}}`,
-so the Wish UI is hidden. To turn it on after approval, without rebuilding, mount a
-ConfigMap over that one file. That manifest wiring isn't added yet.
+The image serves `/omega-factory/config.json` with every feature off:
+
+```json
+{ "features": { "wishes": false, "maximizeOnLaunch": false } }
+```
+
+| Flag               | When `true`                                                                                                                     |
+| ------------------ | ------------------------------------------------------------------------------------------------------------------------------- |
+| `wishes`           | Shows the **Make a Wish** button and form. The Wish server must also run with `WISH_ENABLED=1` for submissions to be accepted.  |
+| `maximizeOnLaunch` | An installed desktop app window fills the screen once per app launch. A reload never re-maximizes a window the player restored. |
+
+To turn a feature on after approval, without rebuilding, mount a ConfigMap over that
+one file. Only a literal `true` enables a flag, and a flag left out of the file is
+off. That manifest wiring isn't added yet.
 
 ```yaml
-# ConfigMap omega-factory-config, data: config.json: '{"features":{"wishes":true}}'
+# ConfigMap omega-factory-config, data:
+#   config.json: '{"features":{"wishes":true,"maximizeOnLaunch":false}}'
 volumeMounts:
   - name: config
     mountPath: /usr/share/nginx/html/omega-factory/config.json
@@ -99,5 +111,4 @@ volumes:
 A `subPath` mount doesn't follow ConfigMap edits, so run `kubectl rollout restart
 deployment/omega-factory` after changing it. nginx sends `config.json` as `no-cache`,
 and the service worker never caches it, so players get the new value on their next
-load. Offline, every feature is off. Turning Wishes off works the same way. The Wish server must also run with `WISH_ENABLED=1` for submissions to be
-accepted.
+load. Offline, every feature is off. Turning a feature off works the same way.

@@ -26,10 +26,10 @@
   } from '@lucide/svelte';
   import { modal } from './lib/modal';
   import WishForm from './lib/components/WishForm.svelte';
-  import { ALL_OFF, loadFeatures } from './lib/features';
+  import { ALL_OFF, appFeatures } from './lib/features';
   // Runtime flags from config.json; everything stays hidden until they load as on.
   let features = $state.raw(ALL_OFF);
-  void loadFeatures().then((loaded) => (features = loaded));
+  void appFeatures().then((loaded) => (features = loaded));
   let showWish = $state(false);
   let wishButton = $state<HTMLButtonElement>();
   async function closeWish() {
