@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Verify the deployed game and its entry assets, using only the standard library."""
-import sys
+import argparse
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -17,11 +17,24 @@ class Assets(HTMLParser):
         if tag == "link" and attrs.get("rel") in ("stylesheet", "modulepreload", "icon"):
             self.urls.append(attrs["href"])
 
-opener = urllib.request.build_opener()
+class HostHeader(urllib.request.HTTPHandler):
+    """Send a fixed Host header (also on redirects), e.g. to reach a host-ruled ingress via localhost."""
+    def __init__(self, host):
+        super().__init__()
+        self.host = host
+    def http_request(self, req):
+        req.add_unredirected_header("Host", self.host)
+        return super().http_request(req)
+
+cli = argparse.ArgumentParser(description=__doc__)
+cli.add_argument("url")
+cli.add_argument("--host", help="Host header for plain-HTTP requests (ingress host rule)")
+args = cli.parse_args()
+opener = urllib.request.build_opener(*([HostHeader(args.host)] if args.host else []))
 opener.addheaders = [("User-Agent", "curl/8.5.0")]
 urllib.request.install_opener(opener)
 
-base = sys.argv[1].rstrip("/") + "/"
+base = args.url.rstrip("/") + "/"
 with urllib.request.urlopen(base.rstrip("/"), timeout=20) as response:
     assert response.url == base, f"Slashless URL did not redirect to {base}: {response.url}"
 with urllib.request.urlopen(base, timeout=20) as response:
@@ -48,4 +61,4 @@ except urllib.error.HTTPError as error:
     assert error.code == 404, error.code
 else:
     raise AssertionError("Missing asset did not return 404")
-print(f"PASS: {base} redirect, HTML, {len(parser.urls)} assets, health, missing asset")
+print(f"PASS: {base}{f' (Host: {args.host})' if args.host else ''} redirect, HTML, {len(parser.urls)} assets, health, missing asset")

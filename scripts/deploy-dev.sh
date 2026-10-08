@@ -36,6 +36,7 @@ sed "s|omega-factory:render-required|$image|" deploy/kubernetes.yaml > "$rendere
 kubectl --context kind-dev apply -f "$rendered"
 kubectl --context kind-dev -n omega-factory-dev rollout status deployment/omega-factory --timeout=180s
 kubectl --context kind-dev -n omega-factory-dev get pods -l app=omega-factory -o jsonpath='{range .items[*]}{.metadata.name}{" image="}{.spec.containers[0].image}{" running_image_id="}{.status.containerStatuses[0].imageID}{"\n"}{end}'
-python3 scripts/verify-deployment.py http://localhost/omega-factory/
+# The ingress only has host rules, so the local check must name one of its hosts.
+python3 scripts/verify-deployment.py --host grok-bot.itio.space http://localhost/omega-factory/
 python3 scripts/verify-deployment.py "$public_url"
 kubectl --context kind-dev -n omega-factory-dev get pods -l app=omega-factory -o wide
