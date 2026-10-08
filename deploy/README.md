@@ -62,10 +62,7 @@ do not delete shared infrastructure.
 
 ## Wish follow-up
 
-This image serves only the game. The Wish API is a separate image built from
-`Dockerfile.server` (see `docs/WISHES.md`, "Container image"). Its client endpoint
-is a build argument: build the game with
-`--build-arg VITE_WISH_API_URL=/omega-factory/api/wishes` when the ingress routes
-`/omega-factory/api` to the server (rewritten to `/api`). `scripts/deploy-dev.sh`
-does not pass it yet. Run the server as one replica with a PVC for its YAML and
-verify data survives pod replacement. Do not put Wish YAML on the nginx temporary volume.
+The source snapshot has no Wish server. This image serves only the game.
+When the Wish API is implemented, agree its route and server port, add a separate
+server Deployment/Service and PVC for YAML, verify data survives pod replacement,
+and then connect the frontend. Do not put Wish YAML on the nginx temporary volume.

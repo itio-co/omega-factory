@@ -4,10 +4,7 @@ ENV ELECTRON_SKIP_BINARY_DOWNLOAD=1
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
-# Client Wish endpoint, baked in at build time (the kind ingress serves it at
-# /omega-factory/api/wishes).
-ARG VITE_WISH_API_URL=/api/wishes
-RUN VITE_WISH_API_URL="$VITE_WISH_API_URL" npm run build
+RUN npm run build
 
 FROM nginx:stable-alpine@sha256:0985e772fb9f729e6fa0980da05fca5d9c468e870eed43071545afa9d2e27d94
 COPY deploy/nginx.conf /etc/nginx/nginx.conf
