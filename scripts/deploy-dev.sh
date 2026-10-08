@@ -38,9 +38,13 @@ kubectl --context kind-dev -n omega-factory-dev rollout status deployment/omega-
 # rollout status returns once the new pod is Ready, while the old pod may still be
 # terminating behind the ingress. Wait for every other ReplicaSet's pods to be gone
 # so the checks below only ever reach the new revision.
-new_hash=$(kubectl --context kind-dev -n omega-factory-dev get pods -l app=omega-factory \
-  -o jsonpath="{.items[?(@.spec.containers[0].image=='$image')].metadata.labels.pod-template-hash}" | awk '{print $1}')
-[[ -n "$new_hash" ]] || { echo "No pod found for $image" >&2; exit 1; }
+# Identify the new ReplicaSet by the Deployment's current revision, not by image:
+# a template-only change (same image) leaves old and new pods on the same image.
+revision_now=$(kubectl --context kind-dev -n omega-factory-dev get deployment omega-factory \
+  -o jsonpath='{.metadata.annotations.deployment\.kubernetes\.io/revision}')
+new_hash=$(kubectl --context kind-dev -n omega-factory-dev get replicasets -l app=omega-factory \
+  -o jsonpath="{.items[?(@.metadata.annotations.deployment\.kubernetes\.io/revision=='$revision_now')].metadata.labels.pod-template-hash}")
+[[ -n "$new_hash" && "$new_hash" != *" "* ]] || { echo "Cannot identify the ReplicaSet for revision $revision_now" >&2; exit 1; }
 kubectl --context kind-dev -n omega-factory-dev wait --for=delete pod \
   -l "app=omega-factory,pod-template-hash!=$new_hash" --timeout=120s
 kubectl --context kind-dev -n omega-factory-dev get pods -l app=omega-factory -o jsonpath='{range .items[*]}{.metadata.name}{" image="}{.spec.containers[0].image}{" running_image_id="}{.status.containerStatuses[0].imageID}{"\n"}{end}'
