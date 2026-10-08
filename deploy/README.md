@@ -1,6 +1,8 @@
 # Omega Factory dev deployment
 
-The game runs at `https://kookkoog-wsl-1.itio.space/omega-factory/` after rollout.
+The game runs at `https://grok-bot.tailbe69ab.ts.net/omega-factory/` (tailnet) after
+rollout. The ingress has the same `/omega-factory` rule for hosts `grok-bot.itio.space`
+and `grok-bot.tailbe69ab.ts.net`.
 The target is explicitly `kind-dev` (kind cluster `dev`), namespace
 `omega-factory-dev`, using the existing nginx ingress and gateway TLS.
 No DNS entries, certificates or registry credentials are created.
@@ -8,9 +10,12 @@ No DNS entries, certificates or registry credentials are created.
 ## Deploy
 
 From a clean committed checkout, run `bash scripts/deploy-dev.sh`, or use
-`/kido deploy dev`. Required tools: Git, Docker, kind, kubectl, Python 3.
+`/kido deploy dev`. Required tools: Git, Docker (run as `sudo docker`; override with
+`DOCKER=docker`), kubectl, Python 3.
 The script builds only committed files, using pinned base images and `npm ci`,
-loads `omega-factory:<full-commit-sha>-<image-config-sha>` into kind, applies the manifests, waits
+imports `omega-factory:<full-commit-sha>-<image-config-sha>` into the kind node's containerd
+(`docker save | docker exec -i ${KIND_CLUSTER:-dev}-control-plane ctr -n k8s.io images import --no-unpack -`;
+containerd lists it as `docker.io/library/omega-factory:…`), applies the manifests, waits
 for readiness, then checks local and public ingress including asset MIME types.
 It stops on failure. Receipts live in `git rev-parse --git-path omega-factory-deploy`;
 Kido additionally stores its deployment receipt in the story brain.
@@ -23,7 +28,10 @@ nginx runs as UID 101 on port 8080 with a read-only root filesystem and temporar
 storage only for nginx runtime files. `/omega-factory` redirects to the slash
 form, the health endpoint is `/omega-factory/healthz`, missing assets return 404,
 and hashed assets are cached. The ingress uses a native Prefix path with no
-rewrite annotations. Saves remain in the player's browser.
+rewrite annotations. Every response, including redirects and errors, carries
+`X-Frame-Options: DENY`, `Referrer-Policy: no-referrer` and `X-Content-Type-Options: nosniff`
+(`deploy/security-headers.conf`, included in each location that sets its own headers). No CSP
+yet. Saves remain in the player's browser.
 
 ## Validate without deploying
 
@@ -51,7 +59,7 @@ in kind. Restore it explicitly, then verify:
 ```sh
 kubectl --context kind-dev -n omega-factory-dev set image deployment/omega-factory web=<previous_image-from-receipt>
 kubectl --context kind-dev -n omega-factory-dev rollout status deployment/omega-factory --timeout=180s
-python3 scripts/verify-deployment.py https://kookkoog-wsl-1.itio.space/omega-factory/
+python3 scripts/verify-deployment.py https://grok-bot.tailbe69ab.ts.net/omega-factory/
 ```
 
 Alternatively `rollout undo deployment/omega-factory` restores the preceding
@@ -62,7 +70,8 @@ do not delete shared infrastructure.
 
 ## Wish follow-up
 
-The source snapshot has no Wish server. This image serves only the game.
-When the Wish API is implemented, agree its route and server port, add a separate
-server Deployment/Service and PVC for YAML, verify data survives pod replacement,
-and then connect the frontend. Do not put Wish YAML on the nginx temporary volume.
+The game image bakes in its Wish endpoint at build time:
+`ARG VITE_WISH_API_URL=/omega-factory/api/wishes` (the ingress is expected to route
+`/omega-factory/api` to the Wish server, rewritten to `/api`). Override it with
+`--build-arg VITE_WISH_API_URL=...`. The Wish server image, its Deployment/Service and
+PVC are separate work. Do not put Wish YAML on the nginx temporary volume.

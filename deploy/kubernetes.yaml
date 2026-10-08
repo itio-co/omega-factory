@@ -75,3 +75,12 @@ spec:
               service:
                 name: omega-factory
                 port: { name: http }
+    - host: grok-bot.tailbe69ab.ts.net
+      http:
+        paths:
+          - path: /omega-factory
+            pathType: Prefix
+            backend:
+              service:
+                name: omega-factory
+                port: { name: http }
