@@ -50,6 +50,29 @@ For Electron builds, set an absolute `VITE_WISH_API_URL` at build time. A `file:
 client has the origin `null`; supporting it requires explicitly adding `null` to
 `WISH_ORIGINS`. There is no server or credential bundled into the desktop client.
 
+## Container image
+
+`Dockerfile.server` packages only the submission server (no worker, Claude or npm
+toolchain): Node 24 slim with `git`, `python3`, PyYAML, `flock`, OpenSSH client and
+`tini`, running as `node` (UID/GID 1000) on `0.0.0.0:8787`. Build committed source:
+
+```sh
+git archive HEAD | docker build -f Dockerfile.server -t omega-factory-wish:<sha> -
+```
+
+Image defaults: `WISH_STORE=/data/wishes/wishes.yaml`, `WISH_BRAINS=/data/brains`,
+`WISH_KIDO_ROOT=/opt/kido`. Mount, writable by UID 1000, a persistent volume at
+`/data/wishes`, and a dedicated brain clone at `/data/brains` on branch
+`omega-factory` with an `origin` the pod can push to. Mount the Kido skill
+(read-only) at `/opt/kido` so `/opt/kido/scripts/kido-brain.py` exists. Set
+`WISH_ORIGINS` to the public game origin and the Git identity through
+`GIT_AUTHOR_NAME`, `GIT_AUTHOR_EMAIL`, `GIT_COMMITTER_NAME` and `GIT_COMMITTER_EMAIL`.
+Keep `WISH_WORKER_ENABLED` unset. The server answers exactly `/api/wishes` and
+`/healthz`; a prefixed ingress path must be rewritten to them.
+
+The game client reads `VITE_WISH_API_URL` at build time (default `/api/wishes`);
+a game image served under a path prefix must pass the prefixed endpoint to its build.
+
 ## API and durable data
 
 `POST /api/wishes`, `Content-Type: application/json`:
