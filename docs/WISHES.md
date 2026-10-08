@@ -13,9 +13,12 @@ button and form only when it reads `{"features":{"wishes":true}}`. The shipped
 `public/config.json` has `"wishes": false`. A missing file, an HTTP error, invalid
 JSON or a network failure all mean off, and only a literal `true` turns it on. The
 flag is runtime, so ops can turn it on without a rebuild (see `deploy/README.md`).
-For local development, `VITE_FEATURE_WISHES=1 npm run dev` forces it on (`0` forces it
-off). Don't set that for release builds. The Wish server has its own off-by-default
-switch, `WISH_ENABLED`.
+The service worker never caches `config.json` (network-only), so an offline app
+cannot keep a stale `true`: offline means off. For local development,
+`VITE_FEATURE_WISHES=1 npm run dev` forces it on (`0` forces it off). The override is
+honoured only by the dev server (`import.meta.env.DEV`); production builds always
+follow `config.json`, even if the variable is set at build time. The Wish server has
+its own off-by-default switch, `WISH_ENABLED`.
 
 ## Run submission locally
 

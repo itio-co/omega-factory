@@ -1,6 +1,8 @@
 // Omega Factory service worker: network-first for same-origin GETs within scope,
 // falling back to cache when offline. API, websocket and cross-origin requests pass through.
-const CACHE = 'omega-factory-v1';
+// config.json (runtime feature flags) is network-only and never cached, so an offline app
+// cannot keep a stale `true`; a failed fetch means every feature is off.
+const CACHE = 'omega-factory-v2';
 const SCOPE = new URL(self.registration.scope);
 const PRECACHE = ['./', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'favicon.svg'];
 
@@ -28,7 +30,13 @@ self.addEventListener('fetch', (event) => {
   if (req.method !== 'GET' || url.origin !== SCOPE.origin) return;
   if (!url.pathname.startsWith(SCOPE.pathname)) return;
   const rel = url.pathname.slice(SCOPE.pathname.length);
-  if (rel.startsWith('api/') || rel === 'healthz' || req.headers.get('upgrade')) return;
+  if (
+    rel.startsWith('api/') ||
+    rel === 'healthz' ||
+    rel === 'config.json' ||
+    req.headers.get('upgrade')
+  )
+    return;
 
   event.respondWith(
     fetch(req)

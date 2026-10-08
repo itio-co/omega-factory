@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { ALL_OFF, loadFeatures } from './features';
+import { ALL_OFF, devOverrides, loadFeatures } from './features';
 
 const respond = (body: unknown, status = 200) =>
   vi.fn(
@@ -9,43 +9,52 @@ const respond = (body: unknown, status = 200) =>
 describe('loadFeatures', () => {
   it('reads config.json relative to the app base without caching', async () => {
     const fetcher = respond({ features: { wishes: true } });
-    expect(await loadFeatures(fetcher, undefined)).toEqual({ wishes: true });
+    expect(await loadFeatures(fetcher, {})).toEqual({ wishes: true });
     expect(fetcher).toHaveBeenCalledWith('./config.json', { cache: 'no-store' });
   });
 
   it('is off when config.json says so or omits the feature', async () => {
-    expect(await loadFeatures(respond({ features: { wishes: false } }), undefined)).toEqual(
-      ALL_OFF,
-    );
-    expect(await loadFeatures(respond({}), undefined)).toEqual(ALL_OFF);
-    expect(await loadFeatures(respond({ features: null }), undefined)).toEqual(ALL_OFF);
+    expect(await loadFeatures(respond({ features: { wishes: false } }), {})).toEqual(ALL_OFF);
+    expect(await loadFeatures(respond({}), {})).toEqual(ALL_OFF);
+    expect(await loadFeatures(respond({ features: null }), {})).toEqual(ALL_OFF);
+    expect(await loadFeatures(respond(null), {})).toEqual(ALL_OFF);
   });
 
   it('only enables on a literal true', async () => {
     for (const wishes of ['true', 1, 'yes', {}, [true]])
-      expect(await loadFeatures(respond({ features: { wishes } }), undefined)).toEqual(ALL_OFF);
+      expect(await loadFeatures(respond({ features: { wishes } }), {})).toEqual(ALL_OFF);
   });
 
-  it('is off on 404, server errors, invalid JSON and network failures', async () => {
-    expect(await loadFeatures(respond('Not found', 404), undefined)).toEqual(ALL_OFF);
-    expect(await loadFeatures(respond({ features: { wishes: true } }, 500), undefined)).toEqual(
-      ALL_OFF,
-    );
-    expect(await loadFeatures(respond('<html>oops</html>'), undefined)).toEqual(ALL_OFF);
+  it('is off on 404, server errors, invalid JSON and network failures (e.g. offline)', async () => {
+    expect(await loadFeatures(respond('Not found', 404), {})).toEqual(ALL_OFF);
+    expect(await loadFeatures(respond({ features: { wishes: true } }, 500), {})).toEqual(ALL_OFF);
+    expect(await loadFeatures(respond('<html>oops</html>'), {})).toEqual(ALL_OFF);
     const offline = vi.fn(async () => {
       throw new TypeError('Failed to fetch');
     });
-    expect(await loadFeatures(offline, undefined)).toEqual(ALL_OFF);
+    expect(await loadFeatures(offline, {})).toEqual(ALL_OFF);
   });
 
-  it('lets a build-time VITE_FEATURE_WISHES=1|0 override the runtime file', async () => {
-    const off = respond({ features: { wishes: false } });
-    expect(await loadFeatures(off, '1')).toEqual({ wishes: true });
-    expect(off).not.toHaveBeenCalled();
-    expect(await loadFeatures(respond({ features: { wishes: true } }), '0')).toEqual(ALL_OFF);
-    // Any other value is ignored and the runtime file decides.
-    expect(await loadFeatures(respond({ features: { wishes: true } }), 'true')).toEqual({
+  it('applies dev overrides on top of the runtime file', async () => {
+    expect(await loadFeatures(respond({ features: { wishes: false } }), { wishes: true })).toEqual({
       wishes: true,
     });
+    expect(await loadFeatures(respond({ features: { wishes: true } }), { wishes: false })).toEqual(
+      ALL_OFF,
+    );
+  });
+});
+
+describe('devOverrides', () => {
+  it('honours VITE_FEATURE_WISHES=1|0 only on the dev server', () => {
+    expect(devOverrides({ DEV: true, VITE_FEATURE_WISHES: '1' })).toEqual({ wishes: true });
+    expect(devOverrides({ DEV: true, VITE_FEATURE_WISHES: '0' })).toEqual({ wishes: false });
+    expect(devOverrides({ DEV: true, VITE_FEATURE_WISHES: 'true' })).toEqual({});
+    expect(devOverrides({ DEV: true })).toEqual({});
+  });
+
+  it('ignores the override in production builds, so config.json stays the off switch', () => {
+    expect(devOverrides({ DEV: false, VITE_FEATURE_WISHES: '1' })).toEqual({});
+    expect(devOverrides({ VITE_FEATURE_WISHES: '1' })).toEqual({});
   });
 });

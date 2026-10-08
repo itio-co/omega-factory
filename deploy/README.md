@@ -96,7 +96,6 @@ volumes:
 
 A `subPath` mount doesn't follow ConfigMap edits, so run `kubectl rollout restart
 deployment/omega-factory` after changing it. nginx sends `config.json` as `no-cache`,
-and the service worker is network-first, so players get the new value on their next
-load. Offline sessions keep the last value they fetched. Turning Wishes off works the
-same way. The Wish server must also run with `WISH_ENABLED=1` for submissions to be
+and the service worker never caches it, so players get the new value on their next
+load. Offline, every feature is off. Turning Wishes off works the same way. The Wish server must also run with `WISH_ENABLED=1` for submissions to be
 accepted.
