@@ -10,14 +10,17 @@ const project = process.env.WISH_PROJECT || 'omega-factory';
 const skill = resolve(process.env.WISH_KIDO_ROOT || join(homedir(), '.codex/skills/kido'));
 const port = Number(process.env.WISH_PORT || 8787);
 const rateLimit = Number(process.env.WISH_RATE_LIMIT || 10);
+const trustProxy = Number(process.env.WISH_TRUST_PROXY || 0);
 if (
   !Number.isInteger(port) ||
   port < 1 ||
   port > 65535 ||
   !Number.isInteger(rateLimit) ||
-  rateLimit < 1
+  rateLimit < 1 ||
+  !Number.isInteger(trustProxy) ||
+  trustProxy < 0
 )
-  throw new Error('Invalid Wish server port or rate limit');
+  throw new Error('Invalid Wish server port, rate limit or trusted proxy count');
 // Validate the opt-in configuration before acquiring the storage lock.
 let stages;
 if (process.env.WISH_WORKER_ENABLED === '1') {
@@ -36,6 +39,8 @@ const server = createWishServer({
   store,
   createStory,
   rateLimit,
+  trustProxy,
+  enabled: process.env.WISH_ENABLED === '1',
   origins: (process.env.WISH_ORIGINS || 'http://localhost:5173,http://127.0.0.1:5173')
     .split(',')
     .map((s) => s.trim())

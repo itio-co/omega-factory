@@ -9,9 +9,10 @@ RUN npm ci --omit=dev --ignore-scripts --no-audit --no-fund
 FROM node:24-slim@sha256:d6aa754f16b3197301076f047b5def2f02ea1dbbc2ca920407d46d7ec7f87b20
 # git: brain commits/pushes; python3 + PyYAML: Kido scripts; flock (util-linux,
 # in the base image): storage locks; tini reaps the guarded git/python children.
+# No OpenSSH client: the brain remote is HTTPS with a credential helper.
 RUN apt-get update \
   && apt-get install -y --no-install-recommends \
-    git python3 python3-yaml ca-certificates openssh-client tini \
+    git python3 python3-yaml ca-certificates tini \
   && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY package.json ./
@@ -19,8 +20,10 @@ COPY --from=deps /app/node_modules/js-yaml node_modules/js-yaml
 COPY --from=deps /app/node_modules/argparse node_modules/argparse
 COPY --from=deps /app/node_modules/zod node_modules/zod
 COPY server/ server/
-RUN rm server/*.test.mjs \
-  && node --input-type=module -e "for (const m of ['http','store','kido','lock','worker','claude']) await import('/app/server/' + m + '.mjs')" \
+# The optional worker (worker.mjs, claude.mjs) is not shipped: WISH_WORKER_ENABLED=1
+# fails at startup in this image instead of running model sessions.
+RUN rm server/*.test.mjs server/worker.mjs server/claude.mjs \
+  && node --input-type=module -e "for (const m of ['http','store','kido','lock']) await import('/app/server/' + m + '.mjs')" \
   && command -v flock git python3 \
   && python3 -c 'import yaml' \
   && mkdir -p /data/wishes /data/brains \
