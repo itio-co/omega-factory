@@ -1,1 +1,1 @@
-{ "features": { "wishes": false } }
+{ "features": { "wishes": false, "maximizeOnLaunch": false } }

@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
 import {
+  LAUNCH_MARKER,
   STANDALONE_QUERY,
+  maximizeIfEnabled,
   maximizeInstalledWindow,
   maximizeOnLaunch,
   shouldMaximize,
@@ -86,14 +88,102 @@ describe('maximizeInstalledWindow', () => {
   });
 });
 
+/** sessionStorage stand-in; the same instance across calls models reloads in one window. */
+function memoryStorage() {
+  const data = new Map<string, string>();
+  return {
+    data,
+    getItem: (key: string) => data.get(key) ?? null,
+    setItem: (key: string, value: string) => void data.set(key, value),
+  };
+}
+const desktop = { [STANDALONE_QUERY]: true, '(pointer: fine)': true };
+
 describe('maximizeOnLaunch', () => {
-  it('maximizes when a tab is moved into the app window after install', () => {
+  it('maximizes when a tab is moved into the app window after install, once', () => {
     const media: Record<string, boolean> = { '(pointer: fine)': true };
     const { win, asWindow, listeners } = fakeWindow(media);
-    maximizeOnLaunch(asWindow);
+    const storage = memoryStorage();
+    maximizeOnLaunch(asWindow, storage);
     expect(win.resizeTo).not.toHaveBeenCalled();
+    expect(storage.data.size).toBe(0); // a browser tab leaves no marker
     media[STANDALONE_QUERY] = true;
     listeners.forEach((fn) => fn({ matches: true }));
     expect(win.resizeTo).toHaveBeenCalledWith(1920, 1040);
+    listeners.forEach((fn) => fn({ matches: true }));
+    expect(win.resizeTo).toHaveBeenCalledOnce();
+  });
+
+  it('a reload in the same window never re-maximizes a restored window (AC2)', () => {
+    const storage = memoryStorage();
+    const first = fakeWindow(desktop);
+    maximizeOnLaunch(first.asWindow, storage);
+    expect(first.win.resizeTo).toHaveBeenCalledOnce();
+    expect(storage.data.get(LAUNCH_MARKER)).toBe('1');
+    // The player restores the window to 1280x800 and reloads: same sessionStorage.
+    const reloaded = fakeWindow(desktop);
+    maximizeOnLaunch(reloaded.asWindow, storage);
+    expect(reloaded.win.resizeTo).not.toHaveBeenCalled();
+    expect(reloaded.win.moveTo).not.toHaveBeenCalled();
+  });
+
+  it('sets the marker even when the window already fills the screen', () => {
+    const storage = memoryStorage();
+    const full = fakeWindow(desktop, { w: 1920, h: 1040 });
+    maximizeOnLaunch(full.asWindow, storage);
+    expect(full.win.resizeTo).not.toHaveBeenCalled();
+    const restored = fakeWindow(desktop);
+    maximizeOnLaunch(restored.asWindow, storage);
+    expect(restored.win.resizeTo).not.toHaveBeenCalled();
+  });
+
+  it('does nothing without usable sessionStorage', () => {
+    const { win, asWindow } = fakeWindow(desktop);
+    maximizeOnLaunch(asWindow, null);
+    const throwing = {
+      getItem: () => {
+        throw new Error('denied');
+      },
+      setItem: () => {},
+    };
+    maximizeOnLaunch(asWindow, throwing);
+    expect(win.resizeTo).not.toHaveBeenCalled();
+  });
+});
+
+describe('maximizeIfEnabled (features.maximizeOnLaunch)', () => {
+  it('flag off: no resize, no marker, no listener', () => {
+    const { win, asWindow, listeners } = fakeWindow(desktop);
+    const storage = memoryStorage();
+    expect(maximizeIfEnabled({ maximizeOnLaunch: false }, asWindow, storage)).toBe(false);
+    expect(win.resizeTo).not.toHaveBeenCalled();
+    expect(win.moveTo).not.toHaveBeenCalled();
+    expect(storage.data.size).toBe(0);
+    expect(listeners).toHaveLength(0);
+  });
+
+  it('flag on: resizes once per launch', () => {
+    const { win, asWindow } = fakeWindow(desktop);
+    const storage = memoryStorage();
+    expect(maximizeIfEnabled({ maximizeOnLaunch: true }, asWindow, storage)).toBe(true);
+    expect(win.resizeTo).toHaveBeenCalledOnce();
+    maximizeIfEnabled({ maximizeOnLaunch: true }, asWindow, storage);
+    expect(win.resizeTo).toHaveBeenCalledOnce();
+  });
+
+  it('flag on, reload with the marker already set: no resize', () => {
+    const { win, asWindow } = fakeWindow(desktop);
+    const storage = memoryStorage();
+    storage.setItem(LAUNCH_MARKER, '1');
+    maximizeIfEnabled({ maximizeOnLaunch: true }, asWindow, storage);
+    expect(win.resizeTo).not.toHaveBeenCalled();
+  });
+
+  it('a new launch (fresh sessionStorage) maximizes again', () => {
+    for (let launch = 0; launch < 2; launch++) {
+      const { win, asWindow } = fakeWindow(desktop);
+      maximizeIfEnabled({ maximizeOnLaunch: true }, asWindow, memoryStorage());
+      expect(win.resizeTo).toHaveBeenCalledOnce();
+    }
   });
 });

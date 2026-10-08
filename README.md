@@ -102,6 +102,16 @@ An existing browser executable can be selected with
 `PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH`. Tests exercise actual production, graph
 editing, discovery, save validation, and desktop/tablet browser flows.
 
+## Installed web app
+
+The game is a PWA, so it can be installed from Chrome or Edge. The
+`maximizeOnLaunch` runtime flag in `config.json` (off by default) makes the installed
+desktop window fill the screen once per app launch. A reload in the same window
+keeps whatever size the player chose, because a `sessionStorage` marker records that
+the launch was handled. For local development, `VITE_FEATURE_MAXIMIZE_ON_LAUNCH=1 npm
+run dev` forces it on. Production builds ignore that variable. See
+`deploy/README.md` for turning flags on.
+
 ## Desktop distribution
 
 ```sh

@@ -9,10 +9,12 @@ async function enterFactory(page: Page, settled: Promise<unknown>) {
   await expect(page.getByRole('button', { name: 'Save factory' })).toBeVisible();
 }
 
-test('Wish UI is hidden with the shipped config.json (wishes: false)', async ({ page }) => {
+test('Wish UI is hidden with the shipped config.json (all features off)', async ({ page }) => {
   const config = page.waitForResponse('**/config.json');
   await enterFactory(page, config);
-  expect(await (await config).json()).toEqual({ features: { wishes: false } });
+  expect(await (await config).json()).toEqual({
+    features: { wishes: false, maximizeOnLaunch: false },
+  });
   await expect(wishButton(page)).toHaveCount(0);
   await expect(page.getByRole('dialog', { name: 'Make a Wish' })).toHaveCount(0);
 });
@@ -45,3 +47,18 @@ for (const [name, handle] of failures) {
     await expect(wishButton(page)).toHaveCount(0);
   });
 }
+
+test('the game and the launch maximizer share one config.json request', async ({ page }) => {
+  let requests = 0;
+  await page.route('**/config.json', (route) => {
+    requests += 1;
+    return route.fulfill({ json: { features: { wishes: true, maximizeOnLaunch: true } } });
+  });
+  await enterFactory(page, Promise.resolve());
+  await expect(wishButton(page)).toBeVisible();
+  // A browser tab is not standalone, so maximizeOnLaunch leaves no launch marker.
+  expect(
+    await page.evaluate(() => sessionStorage.getItem('omega-factory-launch-maximized')),
+  ).toBeNull();
+  expect(requests).toBe(1);
+});

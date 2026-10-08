@@ -1,9 +1,10 @@
 import { mount } from 'svelte';
 import App from './App.svelte';
 import './app.css';
-import { maximizeOnLaunch } from './lib/pwaWindow';
+import { appFeatures } from './lib/features';
+import { maximizeIfEnabled } from './lib/pwaWindow';
 
-maximizeOnLaunch(window);
+void appFeatures().then((features) => maximizeIfEnabled(features, window));
 mount(App, { target: document.getElementById('app')! });
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {

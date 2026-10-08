@@ -9,8 +9,19 @@ const respond = (body: unknown, status = 200) =>
 describe('loadFeatures', () => {
   it('reads config.json relative to the app base without caching', async () => {
     const fetcher = respond({ features: { wishes: true } });
-    expect(await loadFeatures(fetcher, {})).toEqual({ wishes: true });
+    expect(await loadFeatures(fetcher, {})).toEqual({ ...ALL_OFF, wishes: true });
     expect(fetcher).toHaveBeenCalledWith('./config.json', { cache: 'no-store' });
+  });
+
+  it('reads maximizeOnLaunch independently, default off', async () => {
+    expect(await loadFeatures(respond({ features: { maximizeOnLaunch: true } }), {})).toEqual({
+      wishes: false,
+      maximizeOnLaunch: true,
+    });
+    expect(await loadFeatures(respond({ features: { maximizeOnLaunch: 'true' } }), {})).toEqual(
+      ALL_OFF,
+    );
+    expect(await loadFeatures(respond('Not found', 404), {})).toEqual(ALL_OFF);
   });
 
   it('is off when config.json says so or omits the feature', async () => {
@@ -37,6 +48,7 @@ describe('loadFeatures', () => {
 
   it('applies dev overrides on top of the runtime file', async () => {
     expect(await loadFeatures(respond({ features: { wishes: false } }), { wishes: true })).toEqual({
+      ...ALL_OFF,
       wishes: true,
     });
     expect(await loadFeatures(respond({ features: { wishes: true } }), { wishes: false })).toEqual(
@@ -51,6 +63,13 @@ describe('devOverrides', () => {
     expect(devOverrides({ DEV: true, VITE_FEATURE_WISHES: '0' })).toEqual({ wishes: false });
     expect(devOverrides({ DEV: true, VITE_FEATURE_WISHES: 'true' })).toEqual({});
     expect(devOverrides({ DEV: true })).toEqual({});
+  });
+
+  it('honours VITE_FEATURE_MAXIMIZE_ON_LAUNCH the same way', () => {
+    expect(devOverrides({ DEV: true, VITE_FEATURE_MAXIMIZE_ON_LAUNCH: '1' })).toEqual({
+      maximizeOnLaunch: true,
+    });
+    expect(devOverrides({ DEV: false, VITE_FEATURE_MAXIMIZE_ON_LAUNCH: '1' })).toEqual({});
   });
 
   it('ignores the override in production builds, so config.json stays the off switch', () => {
