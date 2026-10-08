@@ -31,7 +31,6 @@ checkout to its project branch before running the service.
 | ------------------------ | ------------------------------------------------------------------------------- |
 | `WISH_PROJECT_ROOT`      | Current directory, the game repository                                          |
 | `WISH_PROJECT`           | `omega-factory`, also the brain branch                                          |
-| `WISH_REMOTE`            | `github` (default), `gitlab` or `none`; replaces a new story's `remote: none`   |
 | `WISH_BRAINS`            | `<project-root>/.kido/brains`                                                   |
 | `WISH_KIDO_ROOT`         | `~/.codex/skills/kido`, the complete installed skill                            |
 | `WISH_STORE`             | `<project-root>/var/wishes.yaml`                                                |

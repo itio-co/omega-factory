@@ -46,32 +46,10 @@ export async function syncBrain(brains, project, { offline = false } = {}) {
   await git('merge', '--no-edit', `origin/${project}`);
 }
 
-// Without a project checkout (e.g. the k8s Wish pod) kido-brain.py records `remote: none`;
-// replace that single frontmatter line with the configured forge.
-export async function applyRemote(directory, remote) {
-  if (remote === 'none') return false;
-  const file = join(directory, 'meta.md');
-  const text = await readFile(file, 'utf8');
-  const match = text.match(/^---\r?\n[\s\S]*?\r?\n---/);
-  if (!match) throw new Error('Invalid Kido metadata');
-  const front = match[0].replace(/^remote:[ \t]*none[ \t]*$/m, `remote: ${remote}`);
-  if (front === match[0]) return false;
-  await writeFile(file, front + text.slice(match[0].length));
-  return true;
-}
-
-export function kidoStoryCreator({
-  root,
-  brains,
-  project,
-  script,
-  python = 'python3',
-  remote = 'github',
-}) {
+export function kidoStoryCreator({ root, brains, project, script, python = 'python3' }) {
   root = resolve(root);
   brains = resolve(brains);
   if (!/^[a-z0-9][a-z0-9-]*$/.test(project)) throw new Error('Invalid Kido project');
-  if (!/^(github|gitlab|none)$/.test(remote)) throw new Error('Invalid Kido remote');
   return async (wish) => {
     const unlock = await lockFile(join(brains, '.wish-writer.lock'), { wait: true });
     try {
@@ -109,9 +87,6 @@ export function kidoStoryCreator({
       const meta = await readMeta(directory);
       if (meta.id !== story.id || meta.slug !== slug)
         throw new Error('Kido story identity mismatch');
-      // kido-brain.py does not commit; this edit joins the story commit below, or becomes
-      // its own follow-up commit if an earlier attempt already committed the story.
-      await applyRemote(directory, remote);
       for (const name of ['plan', 'implement', 'tasks', 'handoff', 'decisions', 'gaps'])
         await access(join(directory, `${name}.md`));
       const mapping = join(directory, 'wish.json');
@@ -145,10 +120,10 @@ export function kidoStoryCreator({
         await git('push', 'origin', `HEAD:refs/heads/${project}`);
       }
       const local = (await git('rev-parse', 'HEAD')).stdout.trim();
-      const pushed = (await git('ls-remote', 'origin', `refs/heads/${project}`)).stdout.split(
+      const remote = (await git('ls-remote', 'origin', `refs/heads/${project}`)).stdout.split(
         /\s/,
       )[0];
-      if (pushed !== local) throw new Error('Kido push could not be verified');
+      if (remote !== local) throw new Error('Kido push could not be verified');
       return story;
     } finally {
       await unlock();

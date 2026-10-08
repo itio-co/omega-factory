@@ -29,7 +29,6 @@ const createStory = kidoStoryCreator({
   brains,
   project,
   script: join(skill, 'scripts/kido-brain.py'),
-  remote: process.env.WISH_REMOTE || 'github',
 });
 const store = await WishStore.open(process.env.WISH_STORE || join(root, 'var/wishes.yaml'));
 const server = createWishServer({
