@@ -106,9 +106,10 @@ editing, discovery, save validation, and desktop/tablet browser flows.
 
 The game is a PWA, so it can be installed from Chrome or Edge. The
 `maximizeOnLaunch` runtime flag in `config.json` (off by default) makes the installed
-desktop window fill the screen once per app launch. A reload in the same window
-keeps whatever size the player chose, because a `sessionStorage` marker records that
-the launch was handled. For local development, `VITE_FEATURE_MAXIMIZE_ON_LAUNCH=1 npm
+desktop window fill the screen once per app window. A reload in the same window
+keeps whatever size the player chose, because a `sessionStorage` marker (scoped to
+that window) records that it was already maximized; a newly opened app window
+maximizes again. For local development, `VITE_FEATURE_MAXIMIZE_ON_LAUNCH=1 npm
 run dev` forces it on. Production builds ignore that variable. See
 `deploy/README.md` for turning flags on.
 
