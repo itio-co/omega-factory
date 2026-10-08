@@ -30,6 +30,7 @@
   } from '../game/engine';
   import type { Resource } from '../game/types';
   import NodeIcon from './NodeIcon.svelte';
+  import { diagnoseLink } from '../game/transport';
   import QuestTracker from './QuestTracker.svelte';
   let { session }: { session: Session } = $props();
   const game = $derived(session.editorGame);
@@ -42,7 +43,18 @@
   );
   const contract = $derived(CONTRACTS[game.state.contractIndex]);
   const complete = $derived(contract && game.state.contractProgress >= contract.amount);
-  const status = $derived(node ? diagnose(game, node.id) : null);
+  // A linked Outlet/Inlet is diagnosed through its transport link, naming it.
+  const link = $derived(
+    node &&
+      session.worldThing.links.find((l) =>
+        [l.from, l.to].some(
+          (e) => e.factory === session.collection.activeFactory && e.node === node.id,
+        ),
+      ),
+  );
+  const status = $derived(
+    node ? (link ? diagnoseLink(session.worldThing, link) : diagnose(game, node.id)) : null,
+  );
   let confirmDelete = $state(false);
   $effect(() => {
     session.selected;

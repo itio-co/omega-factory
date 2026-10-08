@@ -6,3 +6,7 @@ playwright-report/
 .superpowers/
 *.log
 .DS_Store
+
+var/
+.kido/worktrees/
+.wish-writer.lock
