@@ -1,5 +1,12 @@
 import { expect, test } from '@playwright/test';
 
+// The Wish UI ships behind a runtime flag (default off); these tests turn it on.
+test.beforeEach(async ({ page }) => {
+  await page.route('**/config.json', (route) =>
+    route.fulfill({ json: { features: { wishes: true } } }),
+  );
+});
+
 const story = (id: string) => ({
   id: `20261007120000_wish-${id}`,
   slug: `wish-${id}`,

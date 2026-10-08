@@ -5,6 +5,18 @@ server saves it to YAML, creates a pending Kido story immediately, and returns b
 identities only after that story is pushed. An optional worker later develops the
 existing story, validates its exact commit, and deploys to dev.
 
+## Feature flag (default off)
+
+The Wish UI ships hidden. At startup the game fetches `config.json` next to
+`index.html` (same origin, relative to the base) and shows the **Make a Wish**
+button and form only when it reads `{"features":{"wishes":true}}`. The shipped
+`public/config.json` has `"wishes": false`. A missing file, an HTTP error, invalid
+JSON or a network failure all mean off, and only a literal `true` turns it on. The
+flag is runtime, so ops can turn it on without a rebuild (see `deploy/README.md`).
+For local development, `VITE_FEATURE_WISHES=1 npm run dev` forces it on (`0` forces it
+off). Don't set that for release builds. The Wish server has its own off-by-default
+switch, `WISH_ENABLED`.
+
 ## Run submission locally
 
 Requirements: Node 24+, Linux with `flock` (util-linux), Python 3, the installed Kido

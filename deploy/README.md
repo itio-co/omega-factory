@@ -75,3 +75,28 @@ The game image bakes in its Wish endpoint at build time:
 `/omega-factory/api` to the Wish server, rewritten to `/api`). Override it with
 `--build-arg VITE_WISH_API_URL=...`. The Wish server image, its Deployment/Service and
 PVC are separate work. Do not put Wish YAML on the nginx temporary volume.
+
+### Turning Wishes on (runtime flag)
+
+The image serves `/omega-factory/config.json` with `{"features":{"wishes":false}}`,
+so the Wish UI is hidden. To turn it on after approval, without rebuilding, mount a
+ConfigMap over that one file. That manifest wiring isn't added yet.
+
+```yaml
+# ConfigMap omega-factory-config, data: config.json: '{"features":{"wishes":true}}'
+volumeMounts:
+  - name: config
+    mountPath: /usr/share/nginx/html/omega-factory/config.json
+    subPath: config.json
+    readOnly: true
+volumes:
+  - name: config
+    configMap: { name: omega-factory-config }
+```
+
+A `subPath` mount doesn't follow ConfigMap edits, so run `kubectl rollout restart
+deployment/omega-factory` after changing it. nginx sends `config.json` as `no-cache`,
+and the service worker is network-first, so players get the new value on their next
+load. Offline sessions keep the last value they fetched. Turning Wishes off works the
+same way. The Wish server must also run with `WISH_ENABLED=1` for submissions to be
+accepted.
