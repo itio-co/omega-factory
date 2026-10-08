@@ -11,6 +11,10 @@ metadata:
 spec:
   replicas: 1
   revisionHistoryLimit: 3
+  # Bring the new pod up before the old one goes away.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
   selector:
     matchLabels: { app: omega-factory }
   template:
@@ -29,6 +33,11 @@ spec:
           imagePullPolicy: Never
           ports:
             - { name: http, containerPort: 8080 }
+          # Keep serving for a few seconds after termination starts, so ingress-nginx
+          # drops this endpoint before nginx exits (otherwise deploys briefly return 502).
+          lifecycle:
+            preStop:
+              sleep: { seconds: 5 }
           readinessProbe:
             httpGet: { path: /omega-factory/healthz, port: http }
             periodSeconds: 5
